@@ -70,4 +70,7 @@ data class PaymentOrder(
             )
         }
     }
+
+    fun isLedgerUpdated(): Boolean = isLedgerUpdated
+    fun isWalletUpdated(): Boolean = isWalletUpdated
 }

@@ -46,6 +46,13 @@ class CheckoutServiceTest {
             assertEquals("idempotencyKey", paymentEvent.orderId)
             assertEquals("product1, product2", paymentEvent.orderName)
             assertEquals(2, paymentEvent.orders.size)
+            
+            paymentEvent.orders.forEach { order ->
+                assertEquals("idempotencyKey", order.orderId)
+                assertEquals("NOT_STARTED", order.paymentOrderStatus.name)
+                assertEquals(false, order.isLedgerUpdated())
+                assertEquals(false, order.isWalletUpdated())
+            }
         }
     }
 
