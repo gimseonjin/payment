@@ -7,6 +7,7 @@ import jakarta.transaction.Transactional
 import org.junit.jupiter.api.Assertions.*
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import java.util.UUID
 import kotlin.test.Test
 
 @SpringBootTest
@@ -26,10 +27,12 @@ class CheckoutServiceTest {
     fun `should save payment event and orders successfully`() {
         // Given
         prepareProduct()
+
+        val orderId = UUID.randomUUID().toString()
         val command = CheckoutCommand(
             buyerId = 1,
             productIds = listOf(1, 2),
-            idempotencyKey = "idempotencyKey"
+            idempotencyKey = orderId
         )
 
         // When
@@ -38,7 +41,7 @@ class CheckoutServiceTest {
         // Then
         assertNotNull(result)
         assertEquals(3000, result.amount)
-        assertEquals("idempotencyKey", result.orderId)
+        assertEquals(orderId, result.orderId)
         assertEquals("product1, product2", result.orderName)
 
         paymentEventRepository.findByOrderId("idempotencyKey")?.let { paymentEvent ->
@@ -48,7 +51,7 @@ class CheckoutServiceTest {
             assertEquals(2, paymentEvent.orders.size)
 
             paymentEvent.orders.forEach { order ->
-                assertEquals("idempotencyKey", order.orderId)
+                assertEquals(orderId, order.orderId)
                 assertEquals("NOT_STARTED", order.paymentOrderStatus.name)
                 assertEquals(false, order.isLedgerUpdated())
                 assertEquals(false, order.isWalletUpdated())
@@ -60,10 +63,12 @@ class CheckoutServiceTest {
     fun `should throw exception when trying to save in second time with same idempotency key`() {
         // Given
         prepareProduct()
+
+        val orderId = UUID.randomUUID().toString()
         val command = CheckoutCommand(
             buyerId = 1,
             productIds = listOf(1, 2),
-            idempotencyKey = "idempotencyKey"
+            idempotencyKey = orderId
         )
 
         // When
