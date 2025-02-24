@@ -1,27 +1,8 @@
-package com.kerry.payment.domain
+package com.kerry.payment.payment.domain
 
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
-enum class PaymentType(description: String) {
-    NORMAL("일반 결제");
-
-    companion object {
-        fun get(type: String): PaymentType {
-            return entries.find { it.name == type } ?: error("PaymentType (type: $type) 은 올바르지 않은 결제 타입입니다.")
-        }
-    }
-}
-
-enum class PaymentMethod(val method: String) {
-    EASY_PAY("간편결제");
-
-    companion object {
-        fun get(method: String): PaymentMethod {
-            return entries.find { it.method == method } ?: error("Payment Method (methpd: $method) 는 올바르이 않은 결제 방법입니다.")
-        }
-    }
-}
 
 @Entity
 @Table(name = "payment_event")

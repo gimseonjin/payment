@@ -1,6 +1,7 @@
-package com.kerry.payment.application
+package com.kerry.payment.payment.application
 
 import com.kerry.payment.domain.*
+import com.kerry.payment.payment.domain.*
 import jakarta.transaction.Transactional
 import org.springframework.stereotype.Service
 

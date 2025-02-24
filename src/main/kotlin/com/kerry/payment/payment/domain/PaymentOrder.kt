@@ -1,4 +1,4 @@
-package com.kerry.payment.domain
+package com.kerry.payment.payment.domain
 
 import jakarta.persistence.*
 import java.time.LocalDateTime

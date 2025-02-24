@@ -1,4 +1,4 @@
-package com.kerry.payment.persistance
+package com.kerry.payment.payment.infra
 
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean

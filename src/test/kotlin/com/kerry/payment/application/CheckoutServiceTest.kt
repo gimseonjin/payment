@@ -1,8 +1,10 @@
 package com.kerry.payment.application
 
-import com.kerry.payment.domain.PaymentEventRepository
-import com.kerry.payment.domain.Product
-import com.kerry.payment.domain.ProductRepository
+import com.kerry.payment.payment.domain.PaymentEventRepository
+import com.kerry.payment.payment.domain.Product
+import com.kerry.payment.payment.domain.ProductRepository
+import com.kerry.payment.payment.application.CheckoutCommand
+import com.kerry.payment.payment.application.CheckoutService
 import jakarta.transaction.Transactional
 import org.junit.jupiter.api.Assertions.*
 import org.springframework.beans.factory.annotation.Autowired
