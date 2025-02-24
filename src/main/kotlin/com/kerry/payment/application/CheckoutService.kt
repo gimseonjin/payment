@@ -24,6 +24,9 @@ class CheckoutService(
 ) {
 
     fun checkout(command: CheckoutCommand): CheckoutResult {
+        val existingPaymentEvent = paymentEventRepository.findByOrderId(command.idempotencyKey)
+        require(existingPaymentEvent == null) { "Payment event with orderId ${command.idempotencyKey} already exists" }
+
         val products = productRepository.getProductsBy(command.productIds)
 
         val paymentEvent = PaymentEvent.create(

@@ -23,7 +23,7 @@ class CheckoutServiceTest {
     private lateinit var paymentEventRepository: PaymentEventRepository
 
     @Test
-    fun `checkout should return CheckoutResult`() {
+    fun `should save payment event and orders successfully`() {
         // Given
         prepareProduct()
         val command = CheckoutCommand(
@@ -46,13 +46,32 @@ class CheckoutServiceTest {
             assertEquals("idempotencyKey", paymentEvent.orderId)
             assertEquals("product1, product2", paymentEvent.orderName)
             assertEquals(2, paymentEvent.orders.size)
-            
+
             paymentEvent.orders.forEach { order ->
                 assertEquals("idempotencyKey", order.orderId)
                 assertEquals("NOT_STARTED", order.paymentOrderStatus.name)
                 assertEquals(false, order.isLedgerUpdated())
                 assertEquals(false, order.isWalletUpdated())
             }
+        }
+    }
+
+    @Test
+    fun `should throw exception when trying to save in second time with same idempotency key`() {
+        // Given
+        prepareProduct()
+        val command = CheckoutCommand(
+            buyerId = 1,
+            productIds = listOf(1, 2),
+            idempotencyKey = "idempotencyKey"
+        )
+
+        // When
+        checkoutService.checkout(command)
+
+        // Then
+        assertThrows(IllegalArgumentException::class.java) {
+            checkoutService.checkout(command)
         }
     }
 
