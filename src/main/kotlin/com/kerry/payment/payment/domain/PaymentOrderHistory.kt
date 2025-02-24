@@ -25,5 +25,4 @@ class PaymentOrderHistory(
     var changedBy: String,
     @Column()
     var reason: String?,
-) {
-}
+)

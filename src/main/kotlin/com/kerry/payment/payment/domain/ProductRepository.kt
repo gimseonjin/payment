@@ -8,5 +8,7 @@ import org.springframework.stereotype.Repository
 @Repository
 interface ProductRepository : JpaRepository<Product, Long> {
     @Query("select p from Product p where p.id in :productIds")
-    fun getProductsBy(@Param("productIds") productIds: List<Long>): List<Product>
+    fun getProductsBy(
+        @Param("productIds") productIds: List<Long>,
+    ): List<Product>
 }

@@ -5,7 +5,7 @@ import jakarta.persistence.Entity
 import jakarta.persistence.Id
 
 @Entity
-data class Product (
+data class Product(
     @Id
     val id: Long,
     @Column(nullable = false)
@@ -15,5 +15,5 @@ data class Product (
     @Column(nullable = false)
     val name: String,
     @Column(nullable = false)
-    val sellerId: Long
+    val sellerId: Long,
 )

@@ -5,14 +5,9 @@ import org.springframework.web.bind.annotation.GetMapping
 
 @Controller
 class PaymentController {
-
     @GetMapping("/success")
-    fun successPage(): String{
-        return "success"
-    }
+    fun successPage(): String = "success"
 
     @GetMapping("/fail")
-    fun failPage(): String{
-        return "fail"
-    }
+    fun failPage(): String = "fail"
 }

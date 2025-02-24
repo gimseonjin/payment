@@ -13,19 +13,18 @@ import org.springframework.web.client.RestTemplate
 @RestController
 @RequestMapping("/v1/toss")
 class TossPaymentApiController(
-    private val tossRestTemplate: RestTemplate
+    private val tossRestTemplate: RestTemplate,
 ) {
-
     @PostMapping("/confirm")
     fun confirmPayment(
-        @RequestBody req: TossPaymentConfirmRequest
+        @RequestBody req: TossPaymentConfirmRequest,
     ): ResponseEntity<ApiResponse<String>> {
-
-        val result: ResponseEntity<String> = tossRestTemplate.postForEntity(
-            "/v1/payments/confirm",
-            req,
-            String::class.java
-        )
+        val result: ResponseEntity<String> =
+            tossRestTemplate.postForEntity(
+                "/v1/payments/confirm",
+                req,
+                String::class.java,
+            )
 
         return ResponseEntity.ok(ApiResponse.with(HttpStatus.OK, "Success", result.body))
     }
