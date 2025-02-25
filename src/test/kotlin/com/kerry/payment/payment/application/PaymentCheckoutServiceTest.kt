@@ -1,23 +1,16 @@
-package com.kerry.payment.application
+package com.kerry.payment.payment.application
 
 import com.kerry.payment.payment.domain.PaymentEventRepository
 import com.kerry.payment.payment.domain.Product
 import com.kerry.payment.payment.domain.ProductRepository
-import com.kerry.payment.payment.application.CheckoutCommand
-import com.kerry.payment.payment.application.CheckoutService
-import jakarta.transaction.Transactional
 import org.junit.jupiter.api.Assertions.*
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
 import java.util.UUID
 import kotlin.test.Test
 
-@SpringBootTest
-@Transactional
-class CheckoutServiceTest {
-
+class PaymentCheckoutServiceTest : BaseServiceTest() {
     @Autowired
-    private lateinit var checkoutService: CheckoutService
+    private lateinit var paymentCheckoutService: PaymentCheckoutService
 
     @Autowired
     private lateinit var productRepository: ProductRepository
@@ -31,14 +24,15 @@ class CheckoutServiceTest {
         prepareProduct()
 
         val orderId = UUID.randomUUID().toString()
-        val command = CheckoutCommand(
-            buyerId = 1,
-            productIds = listOf(1, 2),
-            idempotencyKey = orderId
-        )
+        val command =
+            PaymentCheckoutCommand(
+                buyerId = 1,
+                productIds = listOf(1, 2),
+                idempotencyKey = orderId,
+            )
 
         // When
-        val result = checkoutService.checkout(command)
+        val result = paymentCheckoutService.checkout(command)
 
         // Then
         assertNotNull(result)
@@ -67,18 +61,19 @@ class CheckoutServiceTest {
         prepareProduct()
 
         val orderId = UUID.randomUUID().toString()
-        val command = CheckoutCommand(
-            buyerId = 1,
-            productIds = listOf(1, 2),
-            idempotencyKey = orderId
-        )
+        val command =
+            PaymentCheckoutCommand(
+                buyerId = 1,
+                productIds = listOf(1, 2),
+                idempotencyKey = orderId,
+            )
 
         // When
-        checkoutService.checkout(command)
+        paymentCheckoutService.checkout(command)
 
         // Then
         assertThrows(IllegalArgumentException::class.java) {
-            checkoutService.checkout(command)
+            paymentCheckoutService.checkout(command)
         }
     }
 
@@ -90,16 +85,16 @@ class CheckoutServiceTest {
                     amount = 1000,
                     quantity = 10,
                     name = "product1",
-                    sellerId = 1
+                    sellerId = 1,
                 ),
                 Product(
                     id = 2,
                     amount = 2000,
                     quantity = 20,
                     name = "product2",
-                    sellerId = 2
-                )
-            )
+                    sellerId = 2,
+                ),
+            ),
         )
     }
 }

@@ -10,7 +10,7 @@ import java.time.LocalDateTime
 data class PaymentEvent(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    var id: Long = 0L,
+    var id: Long?,
     @Column(nullable = false)
     var buyerId: Long,
     @Column(nullable = false)
@@ -57,6 +57,7 @@ data class PaymentEvent(
                 createdAt = LocalDateTime.now(),
                 updatedAt = LocalDateTime.now(),
                 approvedAt = null,
+                id = null,
             )
     }
 
@@ -65,8 +66,75 @@ data class PaymentEvent(
             this.orders = mutableListOf()
         }
         this.orders.addAll(orders)
-        orders.forEach { it.paymentEvent = this }
+        orders.forEach {
+            if (it.paymentEvent != this) {
+                it.paymentEvent = this
+            }
+        }
     }
 
     fun totalAmount(): Long = orders.sumOf { it.amount }
+
+    fun updateStatusToExecuting() {
+        orders.forEach { it.updateStatusToExecuting() }
+    }
+
+    fun updateStatusToSuccess() {
+        orders.forEach {
+            it.updateStatusToSuccess()
+        }
+    }
+
+    fun updateStatusToFailure(reason: String) {
+        orders.forEach {
+            it.updateStatusToFailure(reason)
+        }
+    }
+
+    fun updateStatusToUnknown() {
+        orders.forEach {
+            it.updateStatusToUnknown()
+        }
+    }
+
+    fun isValid(amount: Long): Boolean = amount == totalAmount()
+
+    fun updateStatus(
+        paymentKey: String,
+        orderId: String,
+        status: PaymentStatus,
+        extraDetails: PaymentExtraDetails?,
+        failure: PaymentFailure?,
+    ) {
+        require(status == PaymentStatus.SUCCESS || status == PaymentStatus.FAILURE || status == PaymentStatus.UNKNOWN) {
+            "결제 (orderId: $orderId) 는 올바르지 않은 결제 상태입니다."
+        }
+
+        if (status == PaymentStatus.SUCCESS) {
+            requireNotNull(extraDetails) {
+                "결제 성공시에는 extraDetails 는 필수입니다."
+            }
+        }
+
+        if (status == PaymentStatus.FAILURE) {
+            requireNotNull(failure) {
+                "결제 실패시에는 failure 는 필수입니다."
+            }
+        }
+
+        this.paymentKey = paymentKey
+
+        when (status) {
+            PaymentStatus.SUCCESS -> {
+                this.type = extraDetails!!.type
+                this.method = extraDetails.method
+                this.approvedAt = extraDetails.approvedAt
+                this.pspRawData = extraDetails.pspRawData
+                this.orderName = extraDetails.orderName
+                this.updateStatusToSuccess()
+            }
+            PaymentStatus.FAILURE -> this.updateStatusToFailure(failure.toString())
+            else -> this.updateStatusToUnknown()
+        }
+    }
 }

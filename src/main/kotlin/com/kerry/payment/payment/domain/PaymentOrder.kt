@@ -10,7 +10,7 @@ import java.time.LocalDateTime
 data class PaymentOrder(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    var id: Long = 0L,
+    var id: Long?,
     @Column(nullable = false)
     var sellerId: Long,
     @Column(nullable = false)
@@ -33,10 +33,12 @@ data class PaymentOrder(
     var createdAt: LocalDateTime,
     @Column(nullable = false)
     var updatedAt: LocalDateTime,
-) {
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "payment_event_id", nullable = false)
-    lateinit var paymentEvent: PaymentEvent
+    var paymentEvent: PaymentEvent,
+) {
+    @OneToMany(mappedBy = "paymentOrder", cascade = [CascadeType.ALL], orphanRemoval = true)
+    lateinit var histories: MutableList<PaymentOrderHistory>
 
     companion object {
         fun create(
@@ -45,6 +47,7 @@ data class PaymentOrder(
             orderId: String,
             amount: Long,
             paymentOrderStatus: PaymentStatus,
+            paymentEvent: PaymentEvent,
         ): PaymentOrder =
             PaymentOrder(
                 sellerId = sellerId,
@@ -58,10 +61,101 @@ data class PaymentOrder(
                 failedThreshold = 5,
                 createdAt = LocalDateTime.now(),
                 updatedAt = LocalDateTime.now(),
+                paymentEvent = paymentEvent,
+                id = null,
             )
     }
 
     fun isLedgerUpdated(): Boolean = isLedgerUpdated
 
     fun isWalletUpdated(): Boolean = isWalletUpdated
+
+    fun updateStatusToExecuting() {
+        require(paymentOrderStatus != PaymentStatus.SUCCESS || paymentOrderStatus != PaymentStatus.FAILURE) {
+            "이미 처리가 완료된 주문입니다."
+        }
+
+        paymentOrderStatus = PaymentStatus.EXECUTING
+        updatedAt = LocalDateTime.now()
+
+        if (!this::histories.isInitialized) {
+            this.histories = mutableListOf()
+        }
+        histories.add(
+            PaymentOrderHistory.create(
+                previousStatus = PaymentStatus.NOT_STARTED,
+                newStatus = PaymentStatus.EXECUTING,
+                changedBy = null,
+                reason = null,
+                paymentOrder = this,
+            ),
+        )
+    }
+
+    fun updateStatusToSuccess() {
+        require(paymentOrderStatus != PaymentStatus.SUCCESS || paymentOrderStatus != PaymentStatus.FAILURE) {
+            "이미 처리가 완료된 주문입니다."
+        }
+
+        paymentOrderStatus = PaymentStatus.SUCCESS
+        updatedAt = LocalDateTime.now()
+
+        if (!this::histories.isInitialized) {
+            this.histories = mutableListOf()
+        }
+        histories.add(
+            PaymentOrderHistory.create(
+                previousStatus = PaymentStatus.EXECUTING,
+                newStatus = PaymentStatus.SUCCESS,
+                changedBy = null,
+                reason = "PAYMENT_CONFIRMATION_DONE",
+                paymentOrder = this,
+            ),
+        )
+    }
+
+    fun updateStatusToFailure(reason: String) {
+        require(paymentOrderStatus != PaymentStatus.SUCCESS || paymentOrderStatus != PaymentStatus.FAILURE) {
+            "이미 처리가 완료된 주문입니다."
+        }
+
+        paymentOrderStatus = PaymentStatus.FAILURE
+        updatedAt = LocalDateTime.now()
+
+        if (!this::histories.isInitialized) {
+            this.histories = mutableListOf()
+        }
+        histories.add(
+            PaymentOrderHistory.create(
+                previousStatus = PaymentStatus.EXECUTING,
+                newStatus = PaymentStatus.FAILURE,
+                changedBy = null,
+                reason = reason,
+                paymentOrder = this,
+            ),
+        )
+    }
+
+    fun updateStatusToUnknown() {
+        require(paymentOrderStatus != PaymentStatus.SUCCESS || paymentOrderStatus != PaymentStatus.FAILURE) {
+            "이미 처리가 완료된 주문입니다."
+        }
+
+        failedCount++
+        paymentOrderStatus = PaymentStatus.UNKNOWN
+        updatedAt = LocalDateTime.now()
+
+        if (!this::histories.isInitialized) {
+            this.histories = mutableListOf()
+        }
+        histories.add(
+            PaymentOrderHistory.create(
+                previousStatus = PaymentStatus.EXECUTING,
+                newStatus = PaymentStatus.FAILURE,
+                changedBy = null,
+                reason = "UNKNOWN",
+                paymentOrder = this,
+            ),
+        )
+    }
 }
