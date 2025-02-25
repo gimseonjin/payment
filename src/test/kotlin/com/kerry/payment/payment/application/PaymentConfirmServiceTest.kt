@@ -31,50 +31,30 @@ class PaymentConfirmServiceTest : BaseServiceTest() {
 
     @Test
     fun `should be SUCCESS if payment confirm is success in PSP`() {
-        prepareProduct()
-        val orderId = UUID.randomUUID().toString()
+        // given
+        val productIds = prepareProduct()
+        val (checkoutResult, orderId) = performCheckout(productIds)
 
-        val confirmCommand =
-            PaymentCheckoutCommand(
-                idempotencyKey = orderId,
-                buyerId = 1L,
-                productIds = listOf(1L, 2L),
-            )
-
-        val checkoutResult = checkoutService.checkout(confirmCommand)
-
-        val paymentConfirmCommand =
-            PaymentConfirmCommand(
-                paymentKey = UUID.randomUUID().toString(),
-                orderId = checkoutResult.orderId,
+        val paymentKey = UUID.randomUUID().toString()
+        val successPaymentConfirmExecutionResult =
+            createSuccessExecutionResult(
+                orderId = orderId,
+                paymentKey = paymentKey,
                 amount = checkoutResult.amount,
             )
-
-        val successPaymentConfirmExecutionResult =
-            PaymentExecutionResult(
-                paymentKey = paymentConfirmCommand.paymentKey,
-                orderId = paymentConfirmCommand.orderId,
-                extraDetails =
-                    PaymentExtraDetails(
-                        type = PaymentType.NORMAL,
-                        method = PaymentMethod.EASY_PAY,
-                        totalAmount = paymentConfirmCommand.amount,
-                        orderName = "success_order_name",
-                        approvedAt = LocalDateTime.now(),
-                        pspConfirmationStatus = PSPConfirmationStatus.DONE,
-                        pspRawData = "success_raw_data",
-                    ),
-                isSuccess = true,
-                isFailure = false,
-                isUnknown = false,
-                isRetryable = false,
-            )
-
         every { tossRestTemplate.confirmPayment(any()) } returns successPaymentConfirmExecutionResult
 
+        // when
+        val paymentConfirmCommand =
+            PaymentConfirmCommand(
+                paymentKey = paymentKey,
+                orderId = orderId,
+                amount = checkoutResult.amount,
+            )
         val paymentConfirmResult = paymentConfirmService.confirm(paymentConfirmCommand)
-        val savedPaymentEvent = paymentEventRepository.findByOrderId(paymentConfirmCommand.orderId)
+        val savedPaymentEvent = paymentEventRepository.findByOrderId(orderId)
 
+        // then
         assertThat(paymentConfirmResult.status).isEqualTo(PaymentStatus.SUCCESS)
         assertThat(savedPaymentEvent!!.orders.all { it.paymentOrderStatus == PaymentStatus.SUCCESS }).isTrue()
         assertThat(savedPaymentEvent.type).isEqualTo(successPaymentConfirmExecutionResult.extraDetails!!.type)
@@ -85,52 +65,96 @@ class PaymentConfirmServiceTest : BaseServiceTest() {
 
     @Test
     fun `should be FAILURE if payment confirm is failure in PSP`() {
-        prepareProduct()
-        val orderId = UUID.randomUUID().toString()
+        // given
+        val productIds = prepareProduct()
+        val (checkoutResult, orderId) = performCheckout(productIds)
 
-        val confirmCommand =
-            PaymentCheckoutCommand(
-                idempotencyKey = orderId,
-                buyerId = 1L,
-                productIds = listOf(1L, 2L),
-            )
-
-        val checkoutResult = checkoutService.checkout(confirmCommand)
-
-        val paymentConfirmCommand =
-            PaymentConfirmCommand(
-                paymentKey = UUID.randomUUID().toString(),
-                orderId = checkoutResult.orderId,
+        val paymentKey = UUID.randomUUID().toString()
+        val failurePaymentConfirmExecutionResult =
+            createFailureExecutionResult(
+                orderId = orderId,
+                paymentKey = paymentKey,
                 amount = checkoutResult.amount,
             )
-
-        val failurePaymentConfirmExecutionResult =
-            PaymentExecutionResult(
-                paymentKey = paymentConfirmCommand.paymentKey,
-                orderId = paymentConfirmCommand.orderId,
-                extraDetails = null,
-                failure =
-                    PaymentFailure(
-                        errorCode = "ERROR_CODE",
-                        message = "failure_message",
-                    ),
-                isSuccess = false,
-                isFailure = true,
-                isUnknown = false,
-                isRetryable = false,
-            )
-
         every { tossRestTemplate.confirmPayment(any()) } returns failurePaymentConfirmExecutionResult
 
+        // when
+        val paymentConfirmCommand =
+            PaymentConfirmCommand(
+                paymentKey = paymentKey,
+                orderId = orderId,
+                amount = checkoutResult.amount,
+            )
         val paymentConfirmResult = paymentConfirmService.confirm(paymentConfirmCommand)
-        val savedPaymentEvent = paymentEventRepository.findByOrderId(paymentConfirmCommand.orderId)
+        val savedPaymentEvent = paymentEventRepository.findByOrderId(orderId)
 
+        // then
         assertThat(paymentConfirmResult.status).isEqualTo(PaymentStatus.FAILURE)
         assertThat(savedPaymentEvent!!.orders.all { it.paymentOrderStatus == PaymentStatus.FAILURE }).isTrue()
     }
 
-    fun prepareProduct() {
-        productRepository.saveAll(
+    // checkout 준비 로직을 별도 함수로 분리, productIds를 매개변수로 받음
+    private fun performCheckout(productIds: List<Long>): Pair<PaymentCheckoutResult, String> {
+        val orderId = UUID.randomUUID().toString()
+        val confirmCommand =
+            PaymentCheckoutCommand(
+                idempotencyKey = orderId,
+                buyerId = 1L,
+                productIds = productIds,
+            )
+        val checkoutResult = checkoutService.checkout(confirmCommand)
+        return Pair(checkoutResult, orderId)
+    }
+
+    // 성공 payment confirm 결과 생성 함수
+    private fun createSuccessExecutionResult(
+        orderId: String,
+        paymentKey: String,
+        amount: Long,
+    ): PaymentExecutionResult =
+        PaymentExecutionResult(
+            paymentKey = paymentKey,
+            orderId = orderId,
+            extraDetails =
+                PaymentExtraDetails(
+                    type = PaymentType.NORMAL,
+                    method = PaymentMethod.EASY_PAY,
+                    totalAmount = amount,
+                    orderName = "success_order_name",
+                    approvedAt = LocalDateTime.now(),
+                    pspConfirmationStatus = PSPConfirmationStatus.DONE,
+                    pspRawData = "success_raw_data",
+                ),
+            isSuccess = true,
+            isFailure = false,
+            isUnknown = false,
+            isRetryable = false,
+        )
+
+    // 실패 payment confirm 결과 생성 함수
+    private fun createFailureExecutionResult(
+        orderId: String,
+        paymentKey: String,
+        amount: Long,
+    ): PaymentExecutionResult =
+        PaymentExecutionResult(
+            paymentKey = paymentKey,
+            orderId = orderId,
+            extraDetails = null,
+            failure =
+                PaymentFailure(
+                    errorCode = "ERROR_CODE",
+                    message = "failure_message",
+                ),
+            isSuccess = false,
+            isFailure = true,
+            isUnknown = false,
+            isRetryable = false,
+        )
+
+    // 상품 준비 후 상품 ID 목록 반환
+    fun prepareProduct(): List<Long> {
+        val products =
             listOf(
                 Product(
                     id = 1,
@@ -146,7 +170,8 @@ class PaymentConfirmServiceTest : BaseServiceTest() {
                     name = "product2",
                     sellerId = 2,
                 ),
-            ),
-        )
+            )
+        productRepository.saveAll(products)
+        return products.map { it.id }
     }
 }
