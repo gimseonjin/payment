@@ -11,8 +11,10 @@ data class PaymentOrderHistory(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long?,
     @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
     var previousStatus: PaymentStatus,
     @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
     var newStatus: PaymentStatus,
     @Column(nullable = false)
     var createdAt: LocalDateTime,

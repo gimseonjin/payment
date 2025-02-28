@@ -93,6 +93,41 @@ class PaymentConfirmServiceTest : BaseServiceTest() {
         assertThat(savedPaymentEvent!!.orders.all { it.paymentOrderStatus == PaymentStatus.FAILURE }).isTrue()
     }
 
+    @Test
+    fun `should be UNKNOWN if payment confirm is failure due to unknown exception in PSP`() {
+        // given
+        val productIds = prepareProduct()
+        val (checkoutResult, orderId) = performCheckout(productIds)
+
+        val paymentKey = UUID.randomUUID().toString()
+        val unknownPaymentConfirmExecutionResult =
+            PaymentExecutionResult(
+                paymentKey = paymentKey,
+                orderId = orderId,
+                extraDetails = null,
+                failure = null,
+                isSuccess = false,
+                isFailure = false,
+                isUnknown = true,
+                isRetryable = false,
+            )
+        every { tossRestTemplate.confirmPayment(any()) } returns unknownPaymentConfirmExecutionResult
+
+        // when
+        val paymentConfirmCommand =
+            PaymentConfirmCommand(
+                paymentKey = paymentKey,
+                orderId = orderId,
+                amount = checkoutResult.amount,
+            )
+        val paymentConfirmResult = paymentConfirmService.confirm(paymentConfirmCommand)
+        val savedPaymentEvent = paymentEventRepository.findByOrderId(orderId)
+
+        // then
+        assertThat(paymentConfirmResult.status).isEqualTo(PaymentStatus.UNKNOWN)
+        assertThat(savedPaymentEvent!!.orders.all { it.paymentOrderStatus == PaymentStatus.UNKNOWN }).isTrue()
+    }
+
     // checkout 준비 로직을 별도 함수로 분리, productIds를 매개변수로 받음
     private fun performCheckout(productIds: List<Long>): Pair<PaymentCheckoutResult, String> {
         val orderId = UUID.randomUUID().toString()

@@ -34,11 +34,11 @@ data class PaymentConfirmResult(
 }
 
 @Service
+@Transactional
 class PaymentConfirmService(
     private val paymentEventRepository: PaymentEventRepository,
     private val tossRestTemplate: TossRestTemplate,
 ) {
-    @Transactional
     fun confirm(confirmCommand: PaymentConfirmCommand): PaymentConfirmResult {
         val paymentEvent =
             paymentEventRepository.findByOrderId(confirmCommand.orderId)

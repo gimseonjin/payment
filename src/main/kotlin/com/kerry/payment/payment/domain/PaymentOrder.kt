@@ -20,6 +20,7 @@ data class PaymentOrder(
     @Column(nullable = false)
     var amount: Long,
     @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
     var paymentOrderStatus: PaymentStatus,
     @Column(nullable = false)
     private var isLedgerUpdated: Boolean,
