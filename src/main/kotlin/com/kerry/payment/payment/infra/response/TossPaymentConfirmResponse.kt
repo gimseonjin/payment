@@ -109,8 +109,8 @@ data class EasyPay(
 )
 
 data class TossFailureResponse(
-    val code: String,
-    val message: String,
+    val code: String = "",
+    val message: String = "",
 )
 
 data class CashReceipt(
