@@ -49,7 +49,7 @@ class PaymentConfirmService(
         paymentEvent.updateStatusToExecuting()
         paymentEvent.isValid(confirmCommand.amount)
 
-        return try {
+        return runCatching {
             val confirmResult =
                 tossRestTemplate.confirmPayment(
                     TossPaymentConfirmRequest(
@@ -60,35 +60,37 @@ class PaymentConfirmService(
                 )
 
             paymentEvent.updateStatus(
-                paymentKey = confirmResult.paymentKey,
-                orderId = confirmResult.orderId,
-                status = confirmResult.paymentStatus(),
-                extraDetails = confirmResult.extraDetails,
-                failure = confirmResult.failure,
-            )
-
-            PaymentConfirmResult(
-                status = confirmResult.paymentStatus(),
-                failure = confirmResult.failure,
-            )
-        } catch (ex: Exception) {
-            val (status, failure) = mapExceptionToFailure(ex)
-
-            paymentEvent.updateStatus(
                 paymentKey = confirmCommand.paymentKey,
                 orderId = confirmCommand.orderId,
-                status = status,
-                extraDetails = null,
-                failure = failure,
+                status = confirmResult.paymentStatus(),
+                extraDetails = confirmResult.extraDetails,
+                failure = null,
             )
 
-            PaymentConfirmResult(status = status, failure = failure)
-        }.also {
-            paymentEventRepository.save(paymentEvent)
-        }
+            confirmResult
+        }.fold(
+            onSuccess = { confirmResult ->
+                paymentEventRepository.save(paymentEvent)
+                PaymentConfirmResult(status = confirmResult.paymentStatus(), failure = null)
+            },
+            onFailure = { ex ->
+                val (status, failure) = mapExceptionToFailure(ex)
+
+                paymentEvent.updateStatus(
+                    paymentKey = confirmCommand.paymentKey,
+                    orderId = confirmCommand.orderId,
+                    status = status,
+                    extraDetails = null,
+                    failure = failure,
+                )
+
+                paymentEventRepository.save(paymentEvent)
+                PaymentConfirmResult(status = status, failure = failure)
+            },
+        )
     }
 
-    private fun mapExceptionToFailure(ex: Exception): Pair<PaymentStatus, PaymentFailure> =
+    private fun mapExceptionToFailure(ex: Throwable): Pair<PaymentStatus, PaymentFailure> =
         when (ex) {
             is PSPConfirmationException ->
                 PaymentStatus.FAILURE to
@@ -96,24 +98,28 @@ class PaymentConfirmService(
                         errorCode = ex.errorCode,
                         message = ex.errorMessage,
                     )
+
             is PaymentValidationException ->
                 PaymentStatus.FAILURE to
                     PaymentFailure(
                         errorCode = ex::class.simpleName ?: "PaymentValidationException",
                         message = ex.message ?: "결제 검증 중 오류가 발생했습니다.",
                     )
+
             is PaymentAlreadyProcessedException ->
                 ex.status to
                     PaymentFailure(
                         errorCode = ex::class.simpleName ?: "PaymentAlreadyProcessedException",
                         message = ex.message ?: "이미 처리된 결제입니다.",
                     )
+
             is TimeoutException ->
                 PaymentStatus.UNKNOWN to
                     PaymentFailure(
                         errorCode = ex::class.simpleName ?: "TimeoutException",
                         message = ex.message ?: "결제 요청이 시간 초과되었습니다.",
                     )
+
             else ->
                 PaymentStatus.UNKNOWN to
                     PaymentFailure(
