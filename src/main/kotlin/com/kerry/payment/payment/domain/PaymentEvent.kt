@@ -156,4 +156,15 @@ data class PaymentEvent(
     fun isFailure(): Boolean = orders.all { it.paymentOrderStatus == PaymentStatus.FAILURE }
 
     fun isUnknown(): Boolean = orders.all { it.paymentOrderStatus == PaymentStatus.UNKNOWN }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as PaymentEvent
+
+        return id == other.id
+    }
+
+    override fun hashCode(): Int = id?.hashCode() ?: 0
 }

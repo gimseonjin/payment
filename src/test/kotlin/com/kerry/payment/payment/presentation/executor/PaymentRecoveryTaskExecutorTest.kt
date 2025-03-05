@@ -1,6 +1,7 @@
 package com.kerry.payment.payment.presentation.executor
 
 import com.kerry.payment.payment.application.PaymentCheckoutCommand
+import com.kerry.payment.payment.application.PaymentCheckoutResult
 import com.kerry.payment.payment.application.PaymentCheckoutService
 import com.kerry.payment.payment.domain.*
 import com.kerry.payment.payment.infra.TossRestTemplate
@@ -34,34 +35,12 @@ class PaymentRecoveryTaskExecutorTest : BasePresentationTest() {
     fun `should recover payment`() {
         // given
         val products = prepareProduct()
-
-        val orderId = UUID.randomUUID().toString()
-        val command =
-            PaymentCheckoutCommand(
-                buyerId = 1,
-                productIds = products.map { it.id },
-                idempotencyKey = orderId,
-            )
-        val checkoutResult = paymentCheckoutService.checkout(command)
-
-        val paymentEvent = paymentEventRepository.findByOrderId(checkoutResult.orderId)!!
-        val paymentKey = UUID.randomUUID().toString()
-        paymentEvent.updateStatus(
-            paymentKey = paymentKey,
-            orderId = checkoutResult.orderId,
-            status = PaymentStatus.UNKNOWN,
-            extraDetails = null,
-            failure =
-                PaymentFailure(
-                    errorCode = "code",
-                    message = "message",
-                ),
-        )
-        paymentEventRepository.save(paymentEvent)
+        val (checkoutResult, orderId) = prepareCheckout(products.map { it.id })
+        val prepareUnknownPayment = prepareUnknownPayment(checkoutResult)
 
         val successPaymentConfirmExecutionResult =
             PaymentExecutionResult(
-                paymentKey = paymentKey,
+                paymentKey = prepareUnknownPayment.paymentKey!!,
                 orderId = orderId,
                 extraDetails =
                     PaymentExtraDetails(
@@ -85,6 +64,7 @@ class PaymentRecoveryTaskExecutorTest : BasePresentationTest() {
 
         // then
         val savedPaymentEvent = paymentEventRepository.findByOrderId(orderId)!!
+        assertEquals(prepareUnknownPayment, savedPaymentEvent)
         assertTrue(savedPaymentEvent.isSuccess())
     }
 
@@ -92,30 +72,8 @@ class PaymentRecoveryTaskExecutorTest : BasePresentationTest() {
     fun `should fail to recovery when an unknown exception occurs`() {
         // given
         val products = prepareProduct()
-
-        val orderId = UUID.randomUUID().toString()
-        val command =
-            PaymentCheckoutCommand(
-                buyerId = 1,
-                productIds = products.map { it.id },
-                idempotencyKey = orderId,
-            )
-        val checkoutResult = paymentCheckoutService.checkout(command)
-
-        val paymentEvent = paymentEventRepository.findByOrderId(checkoutResult.orderId)!!
-        val paymentKey = UUID.randomUUID().toString()
-        paymentEvent.updateStatus(
-            paymentKey = paymentKey,
-            orderId = checkoutResult.orderId,
-            status = PaymentStatus.UNKNOWN,
-            extraDetails = null,
-            failure =
-                PaymentFailure(
-                    errorCode = "code",
-                    message = "message",
-                ),
-        )
-        paymentEventRepository.save(paymentEvent)
+        val (checkoutResult, orderId) = prepareCheckout(products.map { it.id })
+        val prepareUnknownPayment = prepareUnknownPayment(checkoutResult)
 
         every { tossRestTemplate.confirmPayment(any()) } throws
             PSPConfirmationException(
@@ -133,6 +91,7 @@ class PaymentRecoveryTaskExecutorTest : BasePresentationTest() {
 
         // then
         val savedPaymentEvent = paymentEventRepository.findByOrderId(orderId)!!
+        assertEquals(prepareUnknownPayment, savedPaymentEvent)
         assertTrue(savedPaymentEvent.isUnknown())
     }
 
@@ -140,30 +99,8 @@ class PaymentRecoveryTaskExecutorTest : BasePresentationTest() {
     fun `should fail to recovery when an failuer exception occurs`() {
         // given
         val products = prepareProduct()
-
-        val orderId = UUID.randomUUID().toString()
-        val command =
-            PaymentCheckoutCommand(
-                buyerId = 1,
-                productIds = products.map { it.id },
-                idempotencyKey = orderId,
-            )
-        val checkoutResult = paymentCheckoutService.checkout(command)
-
-        val paymentEvent = paymentEventRepository.findByOrderId(checkoutResult.orderId)!!
-        val paymentKey = UUID.randomUUID().toString()
-        paymentEvent.updateStatus(
-            paymentKey = paymentKey,
-            orderId = checkoutResult.orderId,
-            status = PaymentStatus.UNKNOWN,
-            extraDetails = null,
-            failure =
-                PaymentFailure(
-                    errorCode = "code",
-                    message = "message",
-                ),
-        )
-        paymentEventRepository.save(paymentEvent)
+        val (checkoutResult, orderId) = prepareCheckout(products.map { it.id })
+        val prepareUnknownPayment = prepareUnknownPayment(checkoutResult)
 
         every { tossRestTemplate.confirmPayment(any()) } throws
             PSPConfirmationException(
@@ -181,10 +118,40 @@ class PaymentRecoveryTaskExecutorTest : BasePresentationTest() {
 
         // then
         val savedPaymentEvent = paymentEventRepository.findByOrderId(orderId)!!
+        assertEquals(prepareUnknownPayment, savedPaymentEvent)
         assertTrue(savedPaymentEvent.isFailure())
     }
 
-    fun prepareProduct(): List<Product> =
+    private fun prepareUnknownPayment(checkoutResult: PaymentCheckoutResult): PaymentEvent {
+        val paymentEvent = paymentEventRepository.findByOrderId(checkoutResult.orderId)!!
+        val paymentKey = UUID.randomUUID().toString()
+        paymentEvent.updateStatus(
+            paymentKey = paymentKey,
+            orderId = checkoutResult.orderId,
+            status = PaymentStatus.UNKNOWN,
+            extraDetails = null,
+            failure =
+                PaymentFailure(
+                    errorCode = "code",
+                    message = "message",
+                ),
+        )
+        return paymentEventRepository.save(paymentEvent)
+    }
+
+    private fun prepareCheckout(productIds: List<Long>): Pair<PaymentCheckoutResult, String> {
+        val orderId = UUID.randomUUID().toString()
+        val confirmCommand =
+            PaymentCheckoutCommand(
+                idempotencyKey = orderId,
+                buyerId = 1L,
+                productIds = productIds,
+            )
+        val checkoutResult = paymentCheckoutService.checkout(confirmCommand)
+        return Pair(checkoutResult, orderId)
+    }
+
+    private fun prepareProduct(): List<Product> =
         productRepository.saveAll(
             listOf(
                 Product(
