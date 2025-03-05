@@ -2,9 +2,11 @@ package com.kerry.payment.payment.application
 
 import com.kerry.payment.payment.domain.*
 import com.kerry.payment.payment.infra.TossRestTemplate
+import com.kerry.payment.payment.infra.response.PSPConfirmationException
 import com.kerry.payment.payment.presentation.api.request.TossPaymentConfirmRequest
 import jakarta.transaction.Transactional
 import org.springframework.stereotype.Service
+import java.util.concurrent.TimeoutException
 
 data class PaymentConfirmCommand(
     val paymentKey: String,
@@ -47,27 +49,76 @@ class PaymentConfirmService(
         paymentEvent.updateStatusToExecuting()
         paymentEvent.isValid(confirmCommand.amount)
 
-        val confirmResult: PaymentExecutionResult =
-            tossRestTemplate.confirmPayment(
-                TossPaymentConfirmRequest(
-                    orderId = paymentEvent.orderId,
-                    amount = paymentEvent.totalAmount(),
-                    paymentKey = confirmCommand.paymentKey,
-                ),
+        return try {
+            val confirmResult =
+                tossRestTemplate.confirmPayment(
+                    TossPaymentConfirmRequest(
+                        orderId = paymentEvent.orderId,
+                        amount = paymentEvent.totalAmount(),
+                        paymentKey = confirmCommand.paymentKey,
+                    ),
+                )
+
+            paymentEvent.updateStatus(
+                paymentKey = confirmResult.paymentKey,
+                orderId = confirmResult.orderId,
+                status = confirmResult.paymentStatus(),
+                extraDetails = confirmResult.extraDetails,
+                failure = confirmResult.failure,
             )
 
-        paymentEvent.updateStatus(
-            paymentKey = confirmResult.paymentKey,
-            orderId = confirmResult.orderId,
-            status = confirmResult.paymentStatus(),
-            extraDetails = confirmResult.extraDetails,
-            failure = confirmResult.failure,
-        )
+            PaymentConfirmResult(
+                status = confirmResult.paymentStatus(),
+                failure = confirmResult.failure,
+            )
+        } catch (ex: Exception) {
+            val (status, failure) = mapExceptionToFailure(ex)
 
-        paymentEventRepository.save(paymentEvent)
-        return PaymentConfirmResult(
-            status = confirmResult.paymentStatus(),
-            failure = confirmResult.failure,
-        )
+            paymentEvent.updateStatus(
+                paymentKey = confirmCommand.paymentKey,
+                orderId = confirmCommand.orderId,
+                status = status,
+                extraDetails = null,
+                failure = failure,
+            )
+
+            PaymentConfirmResult(status = status, failure = failure)
+        }.also {
+            paymentEventRepository.save(paymentEvent)
+        }
     }
+
+    private fun mapExceptionToFailure(ex: Exception): Pair<PaymentStatus, PaymentFailure> =
+        when (ex) {
+            is PSPConfirmationException ->
+                PaymentStatus.FAILURE to
+                    PaymentFailure(
+                        errorCode = ex.errorCode,
+                        message = ex.errorMessage,
+                    )
+            is PaymentValidationException ->
+                PaymentStatus.FAILURE to
+                    PaymentFailure(
+                        errorCode = ex::class.simpleName ?: "PaymentValidationException",
+                        message = ex.message ?: "결제 검증 중 오류가 발생했습니다.",
+                    )
+            is PaymentAlreadyProcessedException ->
+                ex.status to
+                    PaymentFailure(
+                        errorCode = ex::class.simpleName ?: "PaymentAlreadyProcessedException",
+                        message = ex.message ?: "이미 처리된 결제입니다.",
+                    )
+            is TimeoutException ->
+                PaymentStatus.UNKNOWN to
+                    PaymentFailure(
+                        errorCode = ex::class.simpleName ?: "TimeoutException",
+                        message = ex.message ?: "결제 요청이 시간 초과되었습니다.",
+                    )
+            else ->
+                PaymentStatus.UNKNOWN to
+                    PaymentFailure(
+                        errorCode = ex::class.simpleName ?: "UnknownException",
+                        message = ex.message ?: "알 수 없는 에러가 발생하였습니다.",
+                    )
+        }
 }

@@ -4,6 +4,8 @@ package com.kerry.payment.payment.application
 
 import com.kerry.payment.payment.domain.*
 import com.kerry.payment.payment.infra.TossRestTemplate
+import com.kerry.payment.payment.infra.response.PSPConfirmationException
+import com.kerry.payment.payment.infra.response.TossPaymentError
 import com.ninjasquad.springmockk.MockkBean
 import io.mockk.every
 import org.assertj.core.api.Assertions.assertThat
@@ -37,10 +39,23 @@ class PaymentConfirmServiceTest : BaseServiceTest() {
 
         val paymentKey = UUID.randomUUID().toString()
         val successPaymentConfirmExecutionResult =
-            createSuccessExecutionResult(
-                orderId = orderId,
+            PaymentExecutionResult(
                 paymentKey = paymentKey,
-                amount = checkoutResult.amount,
+                orderId = orderId,
+                extraDetails =
+                    PaymentExtraDetails(
+                        type = PaymentType.NORMAL,
+                        method = PaymentMethod.EASY_PAY,
+                        totalAmount = checkoutResult.amount,
+                        orderName = "success_order_name",
+                        approvedAt = LocalDateTime.now(),
+                        pspConfirmationStatus = PSPConfirmationStatus.DONE,
+                        pspRawData = "success_raw_data",
+                    ),
+                isSuccess = true,
+                isFailure = false,
+                isUnknown = false,
+                isRetryable = false,
             )
         every { tossRestTemplate.confirmPayment(any()) } returns successPaymentConfirmExecutionResult
 
@@ -71,10 +86,19 @@ class PaymentConfirmServiceTest : BaseServiceTest() {
 
         val paymentKey = UUID.randomUUID().toString()
         val failurePaymentConfirmExecutionResult =
-            createFailureExecutionResult(
-                orderId = orderId,
+            PaymentExecutionResult(
                 paymentKey = paymentKey,
-                amount = checkoutResult.amount,
+                orderId = orderId,
+                extraDetails = null,
+                failure =
+                    PaymentFailure(
+                        errorCode = "ERROR_CODE",
+                        message = "failure_message",
+                    ),
+                isSuccess = false,
+                isFailure = true,
+                isUnknown = false,
+                isRetryable = false,
             )
         every { tossRestTemplate.confirmPayment(any()) } returns failurePaymentConfirmExecutionResult
 
@@ -128,6 +152,73 @@ class PaymentConfirmServiceTest : BaseServiceTest() {
         assertThat(savedPaymentEvent!!.orders.all { it.paymentOrderStatus == PaymentStatus.UNKNOWN }).isTrue()
     }
 
+    @Test
+    fun `should handle PSPConfirmationException`() {
+        // given
+        val productIds = prepareProduct()
+        val (checkoutResult, orderId) = performCheckout(productIds)
+
+        val paymentKey = UUID.randomUUID().toString()
+        val pspConfirmationException =
+            PSPConfirmationException(
+                errorCode = TossPaymentError.REJECT_ACCOUNT_PAYMENT.name,
+                errorMessage = TossPaymentError.REJECT_ACCOUNT_PAYMENT.description,
+                isSuccess = false,
+                isFailure = true,
+                isUnknown = false,
+                isRetryableError = false,
+            )
+        every { tossRestTemplate.confirmPayment(any()) } throws pspConfirmationException
+
+        // when
+        val paymentConfirmCommand =
+            PaymentConfirmCommand(
+                paymentKey = paymentKey,
+                orderId = orderId,
+                amount = checkoutResult.amount,
+            )
+        val paymentConfirmResult = paymentConfirmService.confirm(paymentConfirmCommand)
+        val savedPaymentEvent = paymentEventRepository.findByOrderId(orderId)
+
+        // then
+        assertThat(paymentConfirmResult.status).isEqualTo(PaymentStatus.FAILURE)
+        assertThat(savedPaymentEvent!!.isFailure()).isTrue()
+    }
+
+    @Test
+    fun `should handle PaymentValidationException`() {
+        // given
+        val productIds = prepareProduct()
+        val (checkoutResult, orderId) = performCheckout(productIds)
+
+        val paymentKey = UUID.randomUUID().toString()
+        val inValidationPaymentConfirmExecutionResult =
+            PaymentExecutionResult(
+                paymentKey = paymentKey,
+                orderId = orderId,
+                extraDetails = null,
+                isSuccess = true,
+                isFailure = false,
+                isUnknown = false,
+                isRetryable = false,
+            )
+        every { tossRestTemplate.confirmPayment(any()) } returns inValidationPaymentConfirmExecutionResult
+
+        // when
+        val paymentConfirmCommand =
+            PaymentConfirmCommand(
+                paymentKey = paymentKey,
+                orderId = orderId,
+                amount = checkoutResult.amount,
+            )
+        val paymentConfirmResult = paymentConfirmService.confirm(paymentConfirmCommand)
+        val savedPaymentEvent = paymentEventRepository.findByOrderId(orderId)
+
+        // then
+        assertThat(paymentConfirmResult.status).isEqualTo(PaymentStatus.FAILURE)
+        assertThat(savedPaymentEvent!!.isFailure()).isTrue()
+    }
+
     // checkout 준비 로직을 별도 함수로 분리, productIds를 매개변수로 받음
     private fun performCheckout(productIds: List<Long>): Pair<PaymentCheckoutResult, String> {
         val orderId = UUID.randomUUID().toString()
@@ -140,52 +231,6 @@ class PaymentConfirmServiceTest : BaseServiceTest() {
         val checkoutResult = checkoutService.checkout(confirmCommand)
         return Pair(checkoutResult, orderId)
     }
-
-    // 성공 payment confirm 결과 생성 함수
-    private fun createSuccessExecutionResult(
-        orderId: String,
-        paymentKey: String,
-        amount: Long,
-    ): PaymentExecutionResult =
-        PaymentExecutionResult(
-            paymentKey = paymentKey,
-            orderId = orderId,
-            extraDetails =
-                PaymentExtraDetails(
-                    type = PaymentType.NORMAL,
-                    method = PaymentMethod.EASY_PAY,
-                    totalAmount = amount,
-                    orderName = "success_order_name",
-                    approvedAt = LocalDateTime.now(),
-                    pspConfirmationStatus = PSPConfirmationStatus.DONE,
-                    pspRawData = "success_raw_data",
-                ),
-            isSuccess = true,
-            isFailure = false,
-            isUnknown = false,
-            isRetryable = false,
-        )
-
-    // 실패 payment confirm 결과 생성 함수
-    private fun createFailureExecutionResult(
-        orderId: String,
-        paymentKey: String,
-        amount: Long,
-    ): PaymentExecutionResult =
-        PaymentExecutionResult(
-            paymentKey = paymentKey,
-            orderId = orderId,
-            extraDetails = null,
-            failure =
-                PaymentFailure(
-                    errorCode = "ERROR_CODE",
-                    message = "failure_message",
-                ),
-            isSuccess = false,
-            isFailure = true,
-            isUnknown = false,
-            isRetryable = false,
-        )
 
     // 상품 준비 후 상품 ID 목록 반환
     fun prepareProduct(): List<Long> {

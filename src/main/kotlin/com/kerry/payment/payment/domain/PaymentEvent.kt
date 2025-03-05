@@ -5,6 +5,15 @@ package com.kerry.payment.payment.domain
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
+class PaymentValidationException(
+    message: String,
+) : RuntimeException(message)
+
+class PaymentAlreadyProcessedException(
+    val status: PaymentStatus,
+    message: String,
+) : RuntimeException(message)
+
 @Entity
 @Table(name = "payment_event")
 data class PaymentEvent(
@@ -106,20 +115,24 @@ data class PaymentEvent(
         extraDetails: PaymentExtraDetails?,
         failure: PaymentFailure?,
     ) {
-        require(status == PaymentStatus.SUCCESS || status == PaymentStatus.FAILURE || status == PaymentStatus.UNKNOWN) {
-            "결제 (orderId: $orderId) 는 올바르지 않은 결제 상태입니다."
+        if (this.isSuccess()) {
+            throw PaymentAlreadyProcessedException(PaymentStatus.SUCCESS, "이미 결제가 완료된 주문입니다. (orderId: $orderId)")
         }
 
-        if (status == PaymentStatus.SUCCESS) {
-            requireNotNull(extraDetails) {
-                "결제 성공시에는 extraDetails 는 필수입니다."
-            }
+        if (this.isFailure()) {
+            throw PaymentAlreadyProcessedException(PaymentStatus.FAILURE, "이미 결제가 실패한 주문입니다. (orderId: $orderId)")
         }
 
-        if (status == PaymentStatus.FAILURE) {
-            requireNotNull(failure) {
-                "결제 실패시에는 failure 는 필수입니다."
-            }
+        if (status != PaymentStatus.SUCCESS && status != PaymentStatus.FAILURE && status != PaymentStatus.UNKNOWN) {
+            throw PaymentValidationException("결제 (orderId: $orderId) 는 올바르지 않은 결제 상태입니다.")
+        }
+
+        if (status == PaymentStatus.SUCCESS && extraDetails == null) {
+            throw PaymentValidationException("결제 성공시에는 extraDetails 가 필수입니다. (orderId: $orderId)")
+        }
+
+        if (status == PaymentStatus.FAILURE && failure == null) {
+            throw PaymentValidationException("결제 실패시에는 failure 가 필수입니다. (orderId: $orderId)")
         }
 
         this.paymentKey = paymentKey
@@ -137,4 +150,8 @@ data class PaymentEvent(
             else -> this.updateStatusToUnknown()
         }
     }
+
+    fun isSuccess(): Boolean = orders.all { it.paymentOrderStatus == PaymentStatus.SUCCESS }
+
+    fun isFailure(): Boolean = orders.any { it.paymentOrderStatus == PaymentStatus.FAILURE }
 }

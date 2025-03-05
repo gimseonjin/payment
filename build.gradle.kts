@@ -49,7 +49,5 @@ allOpen {
 }
 
 tasks.withType<Test> {
-    useJUnitPlatform {
-        excludeTags("TooLongTimeTest")
-    }
+    useJUnitPlatform()
 }
