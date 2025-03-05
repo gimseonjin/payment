@@ -93,7 +93,7 @@ class PaymentConfirmService(
     private fun mapExceptionToFailure(ex: Throwable): Pair<PaymentStatus, PaymentFailure> =
         when (ex) {
             is PSPConfirmationException ->
-                PaymentStatus.FAILURE to
+                ex.paymentStatus() to
                     PaymentFailure(
                         errorCode = ex.errorCode,
                         message = ex.errorMessage,

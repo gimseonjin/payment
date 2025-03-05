@@ -153,5 +153,7 @@ data class PaymentEvent(
 
     fun isSuccess(): Boolean = orders.all { it.paymentOrderStatus == PaymentStatus.SUCCESS }
 
-    fun isFailure(): Boolean = orders.any { it.paymentOrderStatus == PaymentStatus.FAILURE }
+    fun isFailure(): Boolean = orders.all { it.paymentOrderStatus == PaymentStatus.FAILURE }
+
+    fun isUnknown(): Boolean = orders.all { it.paymentOrderStatus == PaymentStatus.UNKNOWN }
 }
