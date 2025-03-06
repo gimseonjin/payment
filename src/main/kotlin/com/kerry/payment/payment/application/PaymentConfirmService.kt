@@ -1,10 +1,12 @@
 package com.kerry.payment.payment.application
 
 import com.kerry.payment.payment.domain.*
+import com.kerry.payment.payment.domain.event.PaymentConfirmedEvent
 import com.kerry.payment.payment.infra.TossRestTemplate
 import com.kerry.payment.payment.infra.response.PSPConfirmationException
 import com.kerry.payment.payment.presentation.api.request.TossPaymentConfirmRequest
 import jakarta.transaction.Transactional
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import java.util.concurrent.TimeoutException
 
@@ -40,6 +42,7 @@ data class PaymentConfirmResult(
 class PaymentConfirmService(
     private val paymentEventRepository: PaymentEventRepository,
     private val tossRestTemplate: TossRestTemplate,
+    private val applicationEventPublisher: ApplicationEventPublisher,
 ) {
     fun confirm(confirmCommand: PaymentConfirmCommand): PaymentConfirmResult {
         val paymentEvent =
@@ -47,9 +50,10 @@ class PaymentConfirmService(
                 ?: throw IllegalArgumentException("Payment event not found")
 
         paymentEvent.updateStatusToExecuting()
-        paymentEvent.isValid(confirmCommand.amount)
 
         return runCatching {
+            paymentEvent.isValid(confirmCommand.amount)
+
             val confirmResult =
                 tossRestTemplate.confirmPayment(
                     TossPaymentConfirmRequest(
@@ -71,6 +75,9 @@ class PaymentConfirmService(
         }.fold(
             onSuccess = { confirmResult ->
                 paymentEventRepository.save(paymentEvent)
+
+                applicationEventPublisher.publishEvent(PaymentConfirmedEvent(paymentEventId = paymentEvent.id!!))
+
                 PaymentConfirmResult(status = confirmResult.paymentStatus(), failure = null)
             },
             onFailure = { ex ->

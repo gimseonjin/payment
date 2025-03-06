@@ -3,6 +3,7 @@ package com.kerry.payment.payment.presentation.executor
 import com.kerry.payment.payment.application.PaymentConfirmCommand
 import com.kerry.payment.payment.application.PaymentConfirmService
 import com.kerry.payment.payment.domain.PaymentEventRepository
+import jakarta.transaction.Transactional
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
@@ -13,6 +14,7 @@ import java.time.LocalDateTime
 import java.util.concurrent.TimeUnit
 
 @Component
+@Transactional
 class PaymentRecoveryTaskExecutor(
     private val paymentEventRepository: PaymentEventRepository,
     private val paymentConfirmService: PaymentConfirmService,

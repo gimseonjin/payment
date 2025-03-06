@@ -106,7 +106,11 @@ data class PaymentEvent(
         }
     }
 
-    fun isValid(amount: Long): Boolean = amount == totalAmount()
+    fun isValid(amount: Long) {
+        require(totalAmount() == amount) {
+            "결제 금액이 일치하지 않습니다. (totalAmount: ${totalAmount()}, amount: $amount)"
+        }
+    }
 
     fun updateStatus(
         paymentKey: String,
