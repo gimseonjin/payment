@@ -5,6 +5,7 @@ import com.kerry.payment.payment.application.PaymentCheckoutResult
 import com.kerry.payment.payment.application.PaymentCheckoutService
 import com.kerry.payment.payment.domain.*
 import com.kerry.payment.payment.infra.TossRestTemplate
+import com.kerry.payment.payment.infra.executor.PaymentRecoveryTaskExecutor
 import com.kerry.payment.payment.infra.response.PSPConfirmationException
 import com.kerry.payment.payment.presentation.BasePresentationTest
 import com.ninjasquad.springmockk.MockkBean
