@@ -76,7 +76,13 @@ class PaymentConfirmService(
             onSuccess = { confirmResult ->
                 paymentEventRepository.save(paymentEvent)
 
-                applicationEventPublisher.publishEvent(PaymentConfirmedEvent(paymentEventId = paymentEvent.id!!))
+                applicationEventPublisher.publishEvent(
+                    PaymentConfirmedEvent(
+                        paymentEventId = paymentEvent.id!!,
+                        orderId = paymentEvent.orderId,
+                        paymentOrders = paymentEvent.orders,
+                    ),
+                )
 
                 PaymentConfirmResult(status = confirmResult.paymentStatus(), failure = null)
             },
