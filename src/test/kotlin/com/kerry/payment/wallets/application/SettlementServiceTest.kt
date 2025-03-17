@@ -6,10 +6,14 @@ import com.kerry.payment.payment.domain.PaymentOrder
 import com.kerry.payment.payment.domain.PaymentStatus
 import com.kerry.payment.wallets.domain.Wallet
 import com.kerry.payment.wallets.domain.WalletRepository
+import jakarta.persistence.EntityManager
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class SettlementServiceTest : BaseServiceTest() {
     @Autowired
@@ -17,6 +21,18 @@ class SettlementServiceTest : BaseServiceTest() {
 
     @Autowired
     lateinit var walletRepository: WalletRepository
+
+    @Autowired
+    lateinit var entityManager: EntityManager // 🔹 EntityManager 주입
+
+    @AfterEach
+    fun tearDown() {
+        entityManager.createNativeQuery("SET FOREIGN_KEY_CHECKS = 0").executeUpdate()
+        entityManager.createNativeQuery("TRUNCATE TABLE wallet").executeUpdate()
+        entityManager.createNativeQuery("TRUNCATE TABLE wallet_transaction").executeUpdate()
+        entityManager.createNativeQuery("SET FOREIGN_KEY_CHECKS = 1").executeUpdate()
+        entityManager.flush()
+    }
 
     @Test
     fun `should process settlement successfully`() {
@@ -41,10 +57,12 @@ class SettlementServiceTest : BaseServiceTest() {
         assertThat(updatedWallets[0].userId).isEqualTo(1)
         assertThat(updatedWallets[0].balance).isEqualTo(3000)
         assertThat(updatedWallets[0].transactions).hasSize(1)
+        assertThat(updatedWallets[0].version).isEqualTo(1)
 
         assertThat(updatedWallets[1].userId).isEqualTo(2)
         assertThat(updatedWallets[1].balance).isEqualTo(4000)
         assertThat(updatedWallets[1].transactions).hasSize(1)
+        assertThat(updatedWallets[1].version).isEqualTo(1)
     }
 
     @Test
@@ -76,6 +94,40 @@ class SettlementServiceTest : BaseServiceTest() {
         assertThat(updatedWallets[1].userId).isEqualTo(2)
         assertThat(updatedWallets[1].balance).isEqualTo(4000)
         assertThat(updatedWallets[1].transactions).hasSize(1)
+    }
+
+    @Test
+    fun `should process settlement successfully with correct version in concurrent execution`() {
+        // given
+        val executorService = Executors.newFixedThreadPool(3)
+
+        val wallets: List<Wallet> = executorService.submit<List<Wallet>> { prepareWallets() }.get()
+        val paymentEventId = 1L
+        val orderId = "order-1"
+        val paymentOrders = preparePaymentOrders(orderId)
+
+        // when - 두 개의 스레드에서 동시에 요청을 보냄
+        val future1 =
+            executorService.submit {
+                settlementService.processSettlement(paymentEventId, orderId, paymentOrders)
+            }
+
+        val future2 =
+            executorService.submit {
+                settlementService.processSettlement(paymentEventId, orderId, paymentOrders)
+            }
+
+        executorService.shutdown()
+        executorService.awaitTermination(10, TimeUnit.SECONDS)
+        future1.get()
+        future2.get()
+
+        // then
+        val updatedWallets = walletRepository.getWalletsBySellerIds(wallets.map { it.userId }.toSet())
+
+        assertThat(updatedWallets).hasSize(2)
+        assertThat(updatedWallets[0].version).isEqualTo(1)
+        assertThat(updatedWallets[1].version).isEqualTo(1)
     }
 
     private fun prepareWallets(): List<Wallet> {

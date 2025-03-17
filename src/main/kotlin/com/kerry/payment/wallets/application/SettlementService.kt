@@ -8,6 +8,10 @@ import com.kerry.payment.wallets.domain.event.WalletEventMessage
 import com.kerry.payment.wallets.domain.event.WalletEventMessageType
 import jakarta.transaction.Transactional
 import org.springframework.context.ApplicationEventPublisher
+import org.springframework.dao.CannotAcquireLockException
+import org.springframework.dao.OptimisticLockingFailureException
+import org.springframework.retry.annotation.Backoff
+import org.springframework.retry.annotation.Retryable
 import org.springframework.stereotype.Service
 
 @Service
@@ -17,6 +21,11 @@ class SettlementService(
     private val walletTransactionRepository: WalletTransactionRepository,
     private val applicationEventPublisher: ApplicationEventPublisher,
 ) {
+    @Retryable(
+        value = [OptimisticLockingFailureException::class, CannotAcquireLockException::class],
+        maxAttempts = 3,
+        backoff = Backoff(delay = 1000),
+    )
     fun processSettlement(
         paymentEventId: Long,
         orderId: String,
@@ -25,7 +34,6 @@ class SettlementService(
         if (walletTransactionRepository.existsByOrderId(orderId)) {
             return
         }
-
         val paymentOrdersBySellerId = paymentOrders.groupBy { it.sellerId }
         val sellerIds = paymentOrdersBySellerId.keys
 
@@ -48,5 +56,7 @@ class SettlementService(
                 type = WalletEventMessageType.SUCCESS,
             ),
         )
+
+        System.out.println(wallets)
     }
 }
