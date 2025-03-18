@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   mysql:
-    image: mysql:5.7  # MySQL 5.7 버전 사용
+    image: mysql:8.0
     container_name: mysql_payment
     restart: always
     environment:

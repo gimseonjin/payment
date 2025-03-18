@@ -65,7 +65,7 @@ data class Ledger(
                         type = LedgerType.CREDIT,
                         transaction = transaction,
                         createdAt = LocalDateTime.now(),
-                    ).apply { },
+                    ),
                 debit =
                     Ledger(
                         id = null,
