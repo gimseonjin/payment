@@ -34,6 +34,7 @@ class SettlementService(
         if (walletTransactionRepository.existsByOrderId(orderId)) {
             return
         }
+
         val paymentOrdersBySellerId = paymentOrders.groupBy { it.sellerId }
         val sellerIds = paymentOrdersBySellerId.keys
 
@@ -56,7 +57,5 @@ class SettlementService(
                 type = WalletEventMessageType.SUCCESS,
             ),
         )
-
-        System.out.println(wallets)
     }
 }

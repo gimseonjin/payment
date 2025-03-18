@@ -5,6 +5,11 @@ package com.kerry.payment.payment.domain
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
+data class BuyerSellerAccount(
+    val buyerId: Long,
+    val sellerId: Long,
+)
+
 @Entity
 @Table(name = "payment_order")
 data class PaymentOrder(
@@ -159,4 +164,6 @@ data class PaymentOrder(
             ),
         )
     }
+
+    fun getBuyerSellerAccountIds(): BuyerSellerAccount = BuyerSellerAccount(buyerId = paymentEvent.buyerId, sellerId = sellerId)
 }

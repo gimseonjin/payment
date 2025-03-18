@@ -10,13 +10,23 @@ data class WalletTransaction(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long?,
+    @Column(nullable = false)
     var amount: Long,
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     var type: WalletTransactionType,
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     var referenceType: ReferenceType,
+    @Column(nullable = false)
     var referenceId: Long,
+    @Column(nullable = false)
     var orderId: String,
+    @Column(nullable = false)
     var idempotencyKey: String?,
+    @Column(nullable = false)
     var createdAt: LocalDateTime,
+    @Column(nullable = false)
     var updatedAt: LocalDateTime,
 ) {
     @ManyToOne(fetch = FetchType.LAZY)
