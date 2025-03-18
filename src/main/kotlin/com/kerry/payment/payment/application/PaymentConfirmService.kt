@@ -6,8 +6,13 @@ import com.kerry.payment.payment.infra.TossRestTemplate
 import com.kerry.payment.payment.infra.response.PSPConfirmationException
 import com.kerry.payment.payment.presentation.api.request.TossPaymentConfirmRequest
 import jakarta.transaction.Transactional
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
 import org.springframework.context.ApplicationEventPublisher
+import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
+import java.time.LocalDateTime
 import java.util.concurrent.TimeoutException
 
 data class PaymentConfirmCommand(
@@ -44,6 +49,30 @@ class PaymentConfirmService(
     private val tossRestTemplate: TossRestTemplate,
     private val applicationEventPublisher: ApplicationEventPublisher,
 ) {
+    fun recover(
+        from: LocalDateTime,
+        to: LocalDateTime,
+        limit: Int,
+    ) {
+        paymentEventRepository
+            .findRetryablePayments(
+                from = from,
+                to = to,
+                pageable = Pageable.ofSize(limit),
+            ).map {
+                PaymentConfirmCommand(
+                    paymentKey = it.paymentKey!!,
+                    orderId = it.orderId,
+                    amount = it.totalAmount(),
+                )
+            }.chunked(2)
+            .forEach { chunk ->
+                runBlocking {
+                    chunk.map { async { confirm(it) } }.awaitAll()
+                }
+            }
+    }
+
     fun confirm(confirmCommand: PaymentConfirmCommand): PaymentConfirmResult {
         val paymentEvent =
             paymentEventRepository.findByOrderId(confirmCommand.orderId)
