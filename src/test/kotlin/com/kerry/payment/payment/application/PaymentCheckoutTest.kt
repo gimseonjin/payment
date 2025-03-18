@@ -1,5 +1,6 @@
 package com.kerry.payment.payment.application
 
+import com.kerry.payment.BaseTest
 import com.kerry.payment.payment.domain.PaymentEventRepository
 import com.kerry.payment.payment.domain.Product
 import com.kerry.payment.payment.domain.ProductRepository
@@ -8,7 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import java.util.UUID
 import kotlin.test.Test
 
-class PaymentCheckoutServiceTest : BaseServiceTest() {
+class PaymentCheckoutTest : BaseTest() {
     @Autowired
     private lateinit var paymentCheckoutService: PaymentCheckoutService
 

@@ -1,8 +1,8 @@
 package com.kerry.payment.ledger.application
 
+import com.kerry.payment.BaseTest
 import com.kerry.payment.ledger.domain.LedgerRepository
 import com.kerry.payment.ledger.domain.LedgerType
-import com.kerry.payment.payment.application.BaseServiceTest
 import com.kerry.payment.payment.domain.PaymentEvent
 import com.kerry.payment.payment.domain.PaymentOrder
 import com.kerry.payment.payment.domain.PaymentStatus
@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 
-class DoubleLedgerEntryRecordServiceTest : BaseServiceTest() {
+class DoubleLedgerEntryRecordTest : BaseTest() {
     @Autowired
     lateinit var doubleLedgerEntryRecordService: DoubleLedgerEntryRecordService
 

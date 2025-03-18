@@ -1,14 +1,12 @@
 package com.kerry.payment.payment.presentation.executor
 
+import com.kerry.payment.BaseTest
 import com.kerry.payment.payment.application.PaymentCheckoutCommand
 import com.kerry.payment.payment.application.PaymentCheckoutResult
 import com.kerry.payment.payment.application.PaymentCheckoutService
 import com.kerry.payment.payment.domain.*
-import com.kerry.payment.payment.infra.TossRestTemplate
 import com.kerry.payment.payment.infra.executor.PaymentRecoveryTaskExecutor
 import com.kerry.payment.payment.infra.response.PSPConfirmationException
-import com.kerry.payment.payment.presentation.BasePresentationTest
-import com.ninjasquad.springmockk.MockkBean
 import io.mockk.every
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -16,7 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import java.time.LocalDateTime
 import java.util.*
 
-class PaymentRecoveryTaskExecutorTest : BasePresentationTest() {
+class PaymentRecoveryTaskExecutorTest : BaseTest() {
     @Autowired
     private lateinit var paymentRecoveryTaskExecutor: PaymentRecoveryTaskExecutor
 
@@ -28,9 +26,6 @@ class PaymentRecoveryTaskExecutorTest : BasePresentationTest() {
 
     @Autowired
     private lateinit var paymentEventRepository: PaymentEventRepository
-
-    @MockkBean
-    lateinit var tossRestTemplate: TossRestTemplate
 
     @Test
     fun `should recover payment`() {

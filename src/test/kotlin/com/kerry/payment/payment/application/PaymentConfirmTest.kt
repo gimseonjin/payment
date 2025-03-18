@@ -2,11 +2,10 @@
 
 package com.kerry.payment.payment.application
 
+import com.kerry.payment.BaseTest
 import com.kerry.payment.payment.domain.*
-import com.kerry.payment.payment.infra.TossRestTemplate
 import com.kerry.payment.payment.infra.response.PSPConfirmationException
 import com.kerry.payment.payment.infra.response.TossPaymentError
-import com.ninjasquad.springmockk.MockkBean
 import io.mockk.every
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -14,7 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import java.time.LocalDateTime
 import java.util.UUID
 
-class PaymentConfirmServiceTest : BaseServiceTest() {
+class PaymentConfirmTest : BaseTest() {
     @Autowired
     lateinit var checkoutService: PaymentCheckoutService
 
@@ -26,9 +25,6 @@ class PaymentConfirmServiceTest : BaseServiceTest() {
 
     @Autowired
     lateinit var paymentConfirmService: PaymentConfirmService
-
-    @MockkBean
-    lateinit var tossRestTemplate: TossRestTemplate
 
     @Test
     fun `should be SUCCESS if payment confirm is success in PSP`() {

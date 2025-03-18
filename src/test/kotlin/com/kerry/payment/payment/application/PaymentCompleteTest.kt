@@ -1,12 +1,13 @@
 package com.kerry.payment.payment.application
 
+import com.kerry.payment.BaseTest
 import com.kerry.payment.payment.domain.*
 import org.junit.jupiter.api.Assertions.*
 import org.springframework.beans.factory.annotation.Autowired
 import java.time.LocalDateTime
 import kotlin.test.Test
 
-class PaymentCompleteServiceTest : BaseServiceTest() {
+class PaymentCompleteTest : BaseTest() {
     @Autowired
     lateinit var paymentCompleteService: PaymentCompleteService
 

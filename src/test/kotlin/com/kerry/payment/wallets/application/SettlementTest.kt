@@ -1,6 +1,6 @@
 package com.kerry.payment.wallets.application
 
-import com.kerry.payment.payment.application.BaseServiceTest
+import com.kerry.payment.BaseTest
 import com.kerry.payment.payment.domain.PaymentEvent
 import com.kerry.payment.payment.domain.PaymentOrder
 import com.kerry.payment.payment.domain.PaymentStatus
@@ -14,7 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-class SettlementServiceTest : BaseServiceTest() {
+class SettlementTest : BaseTest() {
     @Autowired
     lateinit var settlementService: SettlementService
 

@@ -1,25 +1,21 @@
 package com.kerry.payment.ledger.application
 
+import com.kerry.payment.BaseTest
 import com.kerry.payment.common.IdempotencyCreator
 import com.kerry.payment.ledger.domain.*
-import com.kerry.payment.payment.application.BaseServiceTest
 import com.kerry.payment.wallets.domain.ReferenceType
-import com.ninjasquad.springmockk.MockkBean
 import io.mockk.*
 import org.junit.jupiter.api.Assertions.*
 import org.springframework.beans.factory.annotation.Autowired
 import java.time.LocalDateTime
 import kotlin.test.Test
 
-class LedgerVerificationServiceTest : BaseServiceTest() {
+class LedgerVerificationTest : BaseTest() {
     @Autowired
     lateinit var ledgerRepository: LedgerRepository
 
     @Autowired
     lateinit var ledgerVerificationService: LedgerVerificationService
-
-    @MockkBean
-    lateinit var ledgerVerificationNotifier: LedgerVerificationNotifier
 
     @Test
     fun `should detect ledger discrepancies correctly and notify`() {
