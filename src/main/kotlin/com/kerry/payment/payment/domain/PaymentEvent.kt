@@ -171,4 +171,8 @@ data class PaymentEvent(
     }
 
     override fun hashCode(): Int = id?.hashCode() ?: 0
+
+    fun isLedgerUpdateDone(): Boolean = orders.all { it.isLedgerUpdated() }
+
+    fun isWalletUpdateDone(): Boolean = orders.all { it.isWalletUpdated() }
 }
