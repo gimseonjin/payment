@@ -20,13 +20,6 @@ class LedgerVerificationService(
         val discrepancies = ledgerRepository.findDiscrepancies(from, to)
 
         if (discrepancies.isNotEmpty()) {
-            print(
-                "🚨 Ledger Discrepancy Detected!\n" +
-                    discrepancies.joinToString("\n") {
-                        "❌ ${it.transactionDate}: " +
-                            "Credit ${it.totalCredit} ≠ Debit ${it.totalDebit} (Diff: ${it.totalCredit - it.totalDebit})"
-                    },
-            )
             ledgerVerificationNotifier.notifyDiscrepancy(
                 "🚨 Ledger Discrepancy Detected!\n" +
                     discrepancies.joinToString("\n") {
