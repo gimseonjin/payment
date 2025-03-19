@@ -251,9 +251,9 @@ Headers: { "Idempotency-Key": "123e4567-e89b-12d3-a456-426614174000" }
 
 ---
 
-# 최종 시스템 아키텍처
+## 최종 시스템 아키텍처
 
-## Technology Stack
+### Technology Stack
 이 결제 시스템은 다음과 같은 주요 기술 스택을 기반으로 구축되었다:
 
 | Technology  | Description |
@@ -265,5 +265,364 @@ Headers: { "Idempotency-Key": "123e4567-e89b-12d3-a456-426614174000" }
 | **MySQL** | 결제, 거래 및 사용자 데이터를 저장하는 관계형 데이터베이스 |
 
 
-## 시스템 아키텍처 다이어그램
+### 시스템 아키텍처 다이어그램
 ![System Architecture](img/system_architecture.png)
+
+---
+
+## Handling Payment Approval Errors
+
+### Goal
+
+결제 승인 과정에서 발생할 수 있는 다양한 에러를 처리하고, 재시도하는 로직을 구현하는 방법과 타임아웃 설정에 대해 설명한다.
+
+
+### Payment Approval Error Handling Flow
+
+Toss Payments 결제 승인 API에서는 결제 실패 시 HTTP 상태 코드와 에러 객체를 반환한다. 주요 에러 유형과 해결 방법을 살펴본다.
+
+📌 **결제 승인 에러 핸들링 흐름도**
+
+![Payment Retry Diagram](img/rtry_process.png)
+
+
+
+#### 주요 에러 유형
+
+- **재시도 불가능한 에러 (Non-Retryable Errors)**
+  - `잔액 부족 (REJECT_ACCOUNT_PAYMENT)`
+  - `카드 한도 초과 (REJECT_CARD_PAYMENT)`
+  - `유효하지 않은 카드 정보 (INVALID_CARD_NUMBER, INVALID_CARD_EXPIRATION)`
+  - **해결 방법**: 사용자가 올바른 결제 정보를 입력할 수 있도록 유도
+
+- **재시도 가능한 에러 (Retryable Errors)**
+  - `일시적인 네트워크 장애 (PROVIDER_ERROR, CARD_PROCESSING_ERROR)`
+  - `내부 서버 오류 (FAILED_INTERNAL_SYSTEM_PROCESSING, UNKNOWN_PAYMENT_ERROR)`
+  - **해결 방법**: 재시도 로직을 활용하여 일정 시간 후 재시도 수행
+
+### Toss Payment Error Enum
+
+```kotlin
+enum class TossPaymentError(
+  val statusCode: Int,
+  val description: String,
+) {
+  ALREADY_PROCESSED_PAYMENT(400, "이미 처리된 결제 입니다."),
+  PROVIDER_ERROR(400, "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요."),
+  EXCEED_MAX_CARD_INSTALLMENT_PLAN(400, "설정 가능한 최대 할부 개월 수를 초과했습니다."),
+  INVALID_REQUEST(400, "잘못된 요청입니다."),
+  NOT_ALLOWED_POINT_USE(400, "포인트 사용이 불가한 카드로 카드 포인트 결제에 실패했습니다."),
+  INVALID_API_KEY(400, "잘못된 시크릿키 연동 정보 입니다."),
+  INVALID_REJECT_CARD(400, "카드 사용이 거절되었습니다. 카드사 문의가 필요합니다."),
+  BELOW_MINIMUM_AMOUNT(400, "신용카드는 결제금액이 100원 이상, 계좌는 200원이상부터 결제가 가능합니다."),
+  INVALID_CARD_EXPIRATION(400, "카드 정보를 다시 확인해주세요. (유효기간)"),
+  INVALID_STOPPED_CARD(400, "정지된 카드 입니다."),
+  EXCEED_MAX_DAILY_PAYMENT_COUNT(400, "하루 결제 가능 횟수를 초과했습니다."),
+  NOT_SUPPORTED_INSTALLMENT_PLAN_CARD_OR_MERCHANT(400, "할부가 지원되지 않는 카드 또는 가맹점 입니다."),
+  INVALID_CARD_INSTALLMENT_PLAN(400, "할부 개월 정보가 잘못되었습니다."),
+  NOT_SUPPORTED_MONTHLY_INSTALLMENT_PLAN(400, "할부가 지원되지 않는 카드입니다."),
+  EXCEED_MAX_PAYMENT_AMOUNT(400, "하루 결제 가능 금액을 초과했습니다."),
+  NOT_FOUND_TERMINAL_ID(400, "단말기번호(Terminal Id)가 없습니다. 토스페이먼츠로 문의 바랍니다."),
+  INVALID_AUTHORIZE_AUTH(400, "유효하지 않은 인증 방식입니다."),
+  INVALID_CARD_LOST_OR_STOLEN(400, "분실 혹은 도난 카드입니다."),
+  RESTRICTED_TRANSFER_ACCOUNT(400, "계좌는 등록 후 12시간 뒤부터 결제할 수 있습니다. 관련 정책은 해당 은행으로 문의해주세요."),
+  INVALID_CARD_NUMBER(400, "카드번호를 다시 확인해주세요."),
+  INVALID_UNREGISTERED_SUBMALL(400, "등록되지 않은 서브몰입니다. 서브몰이 없는 가맹점이라면 안심클릭이나 ISP 결제가 필요합니다."),
+  NOT_REGISTERED_BUSINESS(400, "등록되지 않은 사업자 번호입니다."),
+  EXCEED_MAX_ONE_DAY_WITHDRAW_AMOUNT(400, "1일 출금 한도를 초과했습니다."),
+  EXCEED_MAX_ONE_TIME_WITHDRAW_AMOUNT(400, "1회 출금 한도를 초과했습니다."),
+  CARD_PROCESSING_ERROR(400, "카드사에서 오류가 발생했습니다."),
+  EXCEED_MAX_AMOUNT(400, "거래금액 한도를 초과했습니다."),
+  INVALID_ACCOUNT_INFO_RE_REGISTER(400, "유효하지 않은 계좌입니다. 계좌 재등록 후 시도해주세요."),
+  NOT_AVAILABLE_PAYMENT(400, "결제가 불가능한 시간대입니다"),
+  UNAPPROVED_ORDER_ID(400, "아직 승인되지 않은 주문번호입니다."),
+  EXCEED_MAX_MONTHLY_PAYMENT_AMOUNT(400, "당월 결제 가능금액인 1,000,000원을 초과 하셨습니다."),
+  // 생략....
+  ;
+
+  fun isSuccess(): Boolean =
+    when (this) {
+      ALREADY_PROCESSED_PAYMENT -> true
+      else -> false
+    }
+
+  fun isFailure(): Boolean =
+    when (this) {
+      ALREADY_PROCESSED_PAYMENT,
+      UNKNOWN,
+      UNKNOWN_PAYMENT_ERROR,
+      PROVIDER_ERROR,
+      CARD_PROCESSING_ERROR,
+      FAILED_INTERNAL_SYSTEM_PROCESSING,
+      FAILED_PAYMENT_INTERNAL_SYSTEM_PROCESSING,
+        -> false
+      else -> true
+    }
+
+  fun isUnknown(): Boolean = isSuccess().not() && isFailure().not()
+
+  fun isRetryableError(): Boolean = isUnknown()
+
+  companion object {
+    fun get(errorCode: String): TossPaymentError = entries.find { it.name == errorCode } ?: UNKNOWN
+  }
+}
+
+```
+
+### Implementing Retry Logic
+
+재시도를 수행할 때 다음 사항을 고려해야 한다:
+
+1. **지수 백오프(Exponential Backoff)**
+  - 첫 번째 재시도: 1초 대기 후 실행
+  - 두 번째 재시도: 2초 대기 후 실행
+  - 세 번째 재시도: 4초 대기 후 실행
+
+2. **Jitter 적용**
+  - 모든 요청이 동일한 주기로 재시도되지 않도록 무작위 지연 시간 추가
+
+3. **최대 재시도 횟수 제한**
+  - 무한 재시도를 방지하기 위해 최대 3~5회로 제한
+
+#### Kotlin 기반 Retry 구현 예제
+
+```kotlin
+private fun retry(
+    action: () -> PaymentExecutionResult,
+    maxRetries: Int = 3,
+): PaymentExecutionResult {
+    val retryDelays = listOf(1000L, 2000L, 4000L) // 재시도 대기 시간
+    var lastException: PSPConfirmationException? = null
+
+    for (attempt in 0 until maxRetries) {
+        try {
+            return action()
+        } catch (ex: PSPConfirmationException) {
+            if (!ex.isRetryableError) throw ex
+            lastException = ex
+            val delay = retryDelays.getOrElse(attempt) { retryDelays.last() }
+            Thread.sleep(delay)
+        }
+    }
+    throw lastException ?: PSPConfirmationException("UNKNOWN ERROR", "Unknown error occurred.")
+}
+```
+
+### Timeout 설정
+
+타임아웃을 설정하지 않으면 서버가 무한정 응답을 기다려야 하므로, 적절한 타임아웃 설정이 필요하다.
+
+- **Connection Timeout**: 서버 연결을 시도하는 최대 시간 (예: 5초)
+- **Request Timeout**: 요청을 보낸 후 응답을 기다리는 최대 시간 (예: 10초)
+
+```kotlin
+val httpClient = HttpClient.newBuilder()
+    .connectTimeout(Duration.ofSeconds(5))
+    .build()
+```
+
+### 결론
+
+결제 승인 과정에서 발생하는 다양한 에러를 분류하고, 재시도 가능한 경우와 불가능한 경우를 명확하게 구분하는 것이 중요하다.
+
+재시도 가능한 에러에 대해서는 **지수 백오프(Exponential Backoff)** 및 **Jitter** 전략을 적용하여 서버 부하를 최소화하면서 안정적인 결제 처리를 보장할 수 있다.
+
+또한, `@Retryable`을 활용한 자동 재시도 처리 및 `@Version`을 적용한 Optimistic Locking을 통해 데이터 정합성을 유지하면서도, 네트워크 장애로 인한 결제 승인 실패를 최소화할 수 있다.
+
+이를 통해 안정적인 결제 시스템을 구축할 수 있으며, Toss Payments API의 응답을 기반으로 유연한 에러 핸들링이 가능하다.
+
+---
+
+## Wallet Service Optimistic Locking
+
+### Goal
+
+지갑 상태를 동시에 저장할 때 발생하는 문제를 Optimistic Locking 매커니즘으로 해결한다.
+
+### 쓰기 충돌 문제
+
+여러 Wallet Service가 배포된 환경에서 각 서버가 결제 승인 이벤트를 수신해 정산 처리 작업을 수행할 때, 마지막으로 업데이트된 트랜잭션만 반영되고 동시에 실행된 또 다른 트랜잭션은 무시될 가능성이 있다.
+
+예를 들어, 지갑 잔고가 1000원이었을 때, 2000원을 추가하는 트랜잭션과 3000원을 추가하는 트랜잭션이 동시에 실행되면, 2000원 트랜잭션이 먼저 반영되고 곧바로 3000원 트랜잭션이 반영되면서 최종적으로 지갑의 잔고는 4000원이 된다.
+
+이처럼 Wallet Service는 동시에 동일한 판매자의 지갑 잔액을 업데이트할 때 발생할 수 있는 충돌을 고려해야 하며, 이로 인해 판매자가 받아야 할 금액이 유실되는 상황을 방지해야 한다. 이를 해결하기 위해, 충돌이 자주 발생하지 않는다는 가정하에 Optimistic Locking 방식을 적용한다.
+
+### Optimistic Locking 적용 방법
+
+JPA에서 Optimistic Locking을 적용하기 위해 `@Version` 애노테이션을 사용한다.
+
+- 적용할 수 있는 필드 타입: `Int`, `Long`, `Short`, `Timestamp`
+
+#### Wallet Entity 적용 예시
+
+```kotlin
+@Entity
+@Table(name = "wallets")
+data class JpaWalletEntity (
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  val id: Long? = null,
+
+  @Column(name = "user_id")
+  val userId: Long,
+
+  val balance: BigDecimal,
+
+  @Version
+  val version: Int,
+)
+```
+
+#### 내부적인 SQL 처리 방식
+
+`@Version` 애노테이션이 적용된 필드는 엔터티가 데이터베이스에 반영될 때 버전 검사를 수행한다. 만약 예상했던 버전과 다르면, 데이터가 갱신된 것으로 판단하여 트랜잭션이 실패한다.
+
+```sql
+UPDATE wallets
+SET 
+    balance = ?,
+    version = version + 1
+WHERE
+    id = ? 
+    AND version = ?
+```
+
+### ObjectOptimisticLockingException Handling
+
+`@Version` 애노테이션을 사용해 동시성을 제어할 경우, 쓰기 충돌이 발생하면 `ObjectOptimisticLockingException`이 발생한다. 이 예외는 해당 트랜잭션의 업데이트가 반영되지 않았음을 의미하며, 재시도가 필요하다.
+
+재시도 시에는 최신 상태의 지갑을 조회한 후 작업을 수행해야 하며, 충돌이 반복되지 않도록 일정한 랜덤 딜레이를 추가하는 것이 바람직하다.
+
+### Optimistic Locking을 적용한 SettlementService 구현
+
+```kotlin
+@Entity
+data class Wallet(
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    var id: Long?,
+    var userId: Long,
+    var balance: Long,
+    var createdAt: Long,
+    var updatedAt: Long,
+    @Version
+    var version: Long = 0,
+) {
+    @OneToMany(mappedBy = "wallet", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    lateinit var transactions: MutableList<WalletTransaction>
+}
+
+@Service
+@Transactional
+class SettlementService(
+    private val walletRepository: WalletRepository,
+    private val walletTransactionRepository: WalletTransactionRepository,
+    private val applicationEventPublisher: ApplicationEventPublisher,
+) {
+    @Retryable(
+        value = [OptimisticLockingFailureException::class, CannotAcquireLockException::class],
+        maxAttempts = 3,
+        backoff = Backoff(delay = 1000),
+    )
+    fun processSettlement(
+        paymentEventId: Long,
+        orderId: String,
+        paymentOrders: List<PaymentOrder>,
+    ) {
+        if (walletTransactionRepository.existsByOrderId(orderId)) {
+            return
+        }
+
+        val paymentOrdersBySellerId = paymentOrders.groupBy { it.sellerId }
+        val sellerIds = paymentOrdersBySellerId.keys
+
+        val wallets = walletRepository.getWalletsBySellerIds(sellerIds)
+        wallets.map {
+            val paymentOrder = paymentOrdersBySellerId[it.userId]
+            val totalAmount = paymentOrder!!.sumOf { order -> order.amount }
+            it.deposit(
+                orderId = orderId,
+                amount = totalAmount,
+                referenceType = ReferenceType.PAYMENT,
+                referenceId = paymentEventId,
+            )
+        }
+
+        walletRepository.saveAll(wallets)
+        applicationEventPublisher.publishEvent(
+            WalletEventMessage(
+                orderId = orderId,
+                type = WalletEventMessageType.SUCCESS,
+            ),
+        )
+    }
+}
+```
+
+### 결론
+
+Optimistic Locking을 적용하면, 동시 업데이트로 인한 데이터 정합성 문제를 해결할 수 있다. JPA의 `@Version` 애노테이션을 활용하여 충돌이 발생했을 때 예외를 던지고, 재시도(Retry) 로직을 추가하면 안정적으로 Wallet 상태를 유지할 수 있다. 이를 통해 동시성 문제를 방지하면서도 성능 저하를 최소화할 수 있다.
+
+---
+
+## TODO: 시스템 신뢰성 강화 작업
+
+### 데이터 무결성과 보안
+
+#### 데이터 유실 방지
+
+- **문제**: 데이터베이스 장애로 인해 거래 기록이 손실되면 법적 책임과 고객 신뢰 저하로 이어질 수 있음.
+- **해결 방법**: 다중 지역 데이터베이스 복제를 적용하고, 주기적인 데이터 백업을 통해 복구 방안을 마련해야 함.
+
+#### 데이터 변조 방지
+
+- **문제**: 결제 데이터가 조작되면 결제 금액 변경, 거래 조작 등의 피해가 발생할 수 있음.
+- **해결 방법**: 데이터 암호화 및 무결성 검사 시스템을 구축하여 데이터 변경 여부를 검증해야 함.
+
+### 부하 테스트
+
+> "누구나 훌륭한 아키텍처를 가지고 있다. 높은 트래픽을 맞닥뜨리기 전까지는."
+
+설계 단계에서 우수해 보이는 시스템도 실제 운영 환경에서는 예상치 못한 문제를 경험할 수 있다. 부하 테스트를 통해 시스템이 예상되는 트래픽을 안정적으로 처리할 수 있는지 확인해야 한다.
+
+#### Circuit Breaker 적용
+
+Circuit Breaker 패턴은 특정 서비스가 실패했을 때 전체 시스템이 영향을 받지 않도록 보호하는 역할을 한다. 결제 시스템은 다양한 외부 서비스와 연동되기 때문에, 외부 서비스 장애로 인해 전체 결제 흐름이 중단되지 않도록 Circuit Breaker를 적용해야 한다. 이를 통해 장애 발생 시 빠르게 감지하고, 일정 시간이 지난 후 자동으로 복구할 수 있도록 해야 한다.
+
+### 모니터링
+
+주요 성능 지표를 기반으로 대시보드를 구성하고 실시간 모니터링 및 경고 시스템을 구축해야 한다.
+
+#### 어플리케이션 모니터링
+
+- **헬스 체크**: 애플리케이션이 정상적으로 운영 중인지 확인
+- **응답 시간**: 각 서비스의 평균 및 최대 응답 시간
+- **처리량 (TPS)**: 초당 처리 가능한 트랜잭션 수
+- **오류율**: 특정 시간 동안 발생한 오류 비율
+- **JVM 및 시스템 리소스**: 메모리 사용량, GC 상태, CPU 및 파일 디스크 사용량 등
+
+#### 데이터베이스 모니터링
+
+- **쿼리 성능 분석**: 느린 쿼리 탐색 및 최적화
+- **연결 풀 상태**: 활성화된 연결 수, 유휴 연결 수 모니터링
+- **복제 지연**: 데이터 동기화 상태 점검
+
+#### 메시징 시스템 모니터링 (Kafka 등)
+
+- **메시지 지연 시간**: 생성부터 소비까지의 평균 지연 시간
+- **컨슈머 랙**: 컨슈머가 처리해야 할 메시지의 대기 상태
+- **처리량 모니터링**: 초당 메시지 처리량 및 네트워크 트래픽 모니터링
+
+#### 외부 서비스 모니터링
+
+- **외부 API 응답 시간 및 오류율** 모니터링
+- **PG(결제 게이트웨이) 연동 장애 탐지**
+  - 결제 실패율 급증 감지
+  - 특정 오류 메시지가 지속적으로 발생하는 경우 경고
+  - 결제 시도 대비 승인 비율 감소 감지
+
+### 결론
+
+시스템의 신뢰성을 높이기 위해서는 데이터 무결성을 보장하고, 외부 서비스 장애에 대비하며, 부하 테스트를 통해 실제 운영 환경에서의 성능을 확인해야 한다. 또한, Circuit Breaker를 활용하여 장애 감지 및 복구를 자동화하고, 실시간 모니터링 시스템을 구축하여 문제 발생 시 신속하게 대응할 수 있도록 해야 한다.
+
