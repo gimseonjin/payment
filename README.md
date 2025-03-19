@@ -147,3 +147,123 @@ Headers: { "Idempotency-Key": "123e4567-e89b-12d3-a456-426614174000" }
 이러한 방식으로 **결제 시스템의 안정성을 높이고, 장애 상황에서도 정상적으로 복구할 수 있도록 설계**했다. 🚀
 
 ---
+
+## Payment System ERD
+
+📌 **ER 다이어그램**
+
+![PG UUID](img/payment_erd.png)
+
+### 1. `product`
+- **설명**: 판매자가 등록한 상품 정보를 저장하는 테이블
+- **주요 컬럼**:
+    - `id` (bigint, PK): 상품 ID
+    - `name` (varchar(256)): 상품 이름
+    - `amount` (bigint): 상품 가격
+    - `quantity` (int): 상품 수량
+    - `seller_id` (bigint, FK): 판매자 ID
+
+### 2. `payment_event`
+- **설명**: 결제 요청 이벤트를 관리하는 테이블
+- **주요 컬럼**:
+    - `id` (bigint, PK): 결제 이벤트 ID
+    - `buyer_id` (bigint, FK): 구매자 ID
+    - `order_id` (varchar(255)): 주문 ID
+    - `payment_key` (varchar(255)): 결제 키 (PSP에서 반환되는 고유 키)
+    - `method` (enum): 결제 방식 (예: easy_pay, normal 등)
+    - `is_payment_done` (bit): 결제 완료 여부
+    - `approved_at` (datetime): 결제 승인 시간
+    - `psp_raw_data` (text): PSP 응답 데이터 원본
+    - `updated_at` (datetime): 마지막 업데이트 시간
+
+### 3. `payment_order`
+- **설명**: 개별 주문과 결제 상태를 관리하는 테이블
+- **주요 컬럼**:
+    - `id` (bigint, PK): 주문 ID
+    - `payment_event_id` (bigint, FK): 결제 이벤트 ID
+    - `order_id` (varchar(255)): 주문 고유 식별자
+    - `product_id` (bigint, FK): 상품 ID
+    - `seller_id` (bigint, FK): 판매자 ID
+    - `amount` (bigint): 주문 금액
+    - `payment_order_status` (enum): 주문 상태 (executing, failure, not_started, success, unknown)
+    - `failed_count` (int): 실패 횟수
+    - `failed_threshold` (int): 최대 실패 허용 횟수
+    - `is_ledger_updated` (bit): Ledger 업데이트 여부
+    - `is_wallet_updated` (bit): Wallet 업데이트 여부
+    - `created_at` (datetime): 생성 시간
+    - `updated_at` (datetime): 마지막 업데이트 시간
+
+### 4. `payment_order_history`
+- **설명**: 주문 상태 변경 이력을 저장하는 테이블
+- **주요 컬럼**:
+    - `id` (bigint, PK): 기록 ID
+    - `payment_order_id` (bigint, FK): 관련 주문 ID
+    - `previous_status` (enum): 이전 주문 상태
+    - `new_status` (enum): 변경된 주문 상태
+    - `reason` (varchar(255)): 변경 이유
+    - `changed_by` (varchar(256)): 변경한 주체 (시스템 또는 관리자 등)
+    - `created_at` (datetime): 변경된 시간
+
+### 5. `ledger`
+- **설명**: 거래 내역을 기록하는 Ledger 시스템
+- **주요 컬럼**:
+    - `id` (bigint, PK): Ledger ID
+    - `account_id` (bigint): 관련 계정 ID
+    - `amount` (bigint): 거래 금액
+    - `type` (enum): 거래 유형 (credit, debit)
+    - `transaction_id` (bigint, FK): 거래 ID
+    - `created_at` (datetime): 생성 시간
+
+### 6. `ledger_transaction`
+- **설명**: Ledger 내 개별 거래를 추적하는 테이블
+- **주요 컬럼**:
+    - `id` (bigint, PK): 거래 ID
+    - `transaction_id` (bigint, FK): 관련 Ledger 거래 ID
+    - `description` (varchar(255)): 거래 설명
+    - `idempotency_key` (varchar(255)): 멱등성 키 (중복 방지)
+    - `order_id` (bigint, FK): 관련 주문 ID
+    - `reference_id` (bigint): 참조 ID
+    - `reference_type` (tinyint): 참조 유형
+    - `created_at` (datetime): 생성 시간
+
+### 7. `wallet`
+- **설명**: 사용자의 지갑 정보를 저장하는 테이블
+- **주요 컬럼**:
+    - `id` (bigint, PK): 지갑 ID
+    - `user_id` (bigint, FK): 사용자 ID
+    - `balance` (bigint): 지갑 잔액
+    - `version` (bigint): Optimistic Locking을 위한 버전
+    - `created_at` (datetime): 생성 시간
+    - `updated_at` (datetime): 마지막 업데이트 시간
+
+### 8. `wallet_transaction`
+- **설명**: Wallet에서 발생한 거래 내역을 관리하는 테이블
+- **주요 컬럼**:
+    - `id` (bigint, PK): 거래 ID
+    - `wallet_id` (bigint, FK): 관련 지갑 ID
+    - `amount` (bigint): 거래 금액
+    - `type` (enum): 거래 유형 (deposit, withdraw)
+    - `reference_type` (enum): 참조 유형 (payment, refund)
+    - `order_id` (bigint, FK): 관련 주문 ID
+    - `idempotency_key` (varchar(255)): 멱등성 키 (중복 방지)
+    - `created_at` (datetime): 생성 시간
+    - `updated_at` (datetime): 마지막 업데이트 시간
+
+---
+
+# 최종 시스템 아키텍처
+
+## Technology Stack
+이 결제 시스템은 다음과 같은 주요 기술 스택을 기반으로 구축되었다:
+
+| Technology  | Description |
+|-------------|------------------------------------------------|
+| **Toss Payments** | 결제 게이트웨이(PG)로 사용 |
+| **Spring Boot** | 애플리케이션의 백엔드 프레임워크 |
+| **JPA** | 데이터베이스 ORM(Object-Relational Mapping) 처리 |
+| **Thymeleaf** | 템플릿 엔진을 이용한 프론트엔드 렌더링 |
+| **MySQL** | 결제, 거래 및 사용자 데이터를 저장하는 관계형 데이터베이스 |
+
+
+## 시스템 아키텍처 다이어그램
+![System Architecture](img/system_architecture.png)
